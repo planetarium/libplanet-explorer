@@ -31,7 +31,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Libplanet.Explorer\Libplanet.Explorer.csproj" />
+    <ProjectReference
+      Include="..\Libplanet.Explorer\Libplanet.Explorer.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="wwwroot\**\*">

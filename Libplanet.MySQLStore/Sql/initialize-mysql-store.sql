@@ -65,4 +65,3 @@ CREATE TABLE IF NOT EXISTS `libplanet.mysql`.`State_Hash` (
   PRIMARY KEY (`key`),
     UNIQUE INDEX `key_UNIQUE` (`key` ASC)
 );
-  
