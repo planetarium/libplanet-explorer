@@ -3,11 +3,11 @@ using MySqlConnector;
 using SqlKata.Compilers;
 using SqlKata.Execution;
 
-namespace Libplanet.MySQLStore
+namespace Libplanet.MySqlStore
 {
-    internal static class MySQLUtils
+    internal static class MySqlUtils
     {
-        internal static QueryFactory OpenMySQLDB(string connectionString, MySqlCompiler compiler) =>
+        internal static QueryFactory OpenMySqlDB(string connectionString, MySqlCompiler compiler) =>
             new QueryFactory(new MySqlConnection(connectionString), compiler);
     }
 }

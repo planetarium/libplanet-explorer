@@ -4,18 +4,18 @@ using System.Collections.Generic;
 using System.Linq;
 using Libplanet.Store.Trie;
 using MySqlConnector;
-using MySQLStore.Models;
+using MySqlStore.Models;
 using Serilog;
 using SqlKata.Compilers;
 using SqlKata.Execution;
 
-namespace Libplanet.MySQLStore
+namespace Libplanet.MySqlStore
 {
     /// <summary>
-    /// The <a href="https://www.mysql.com/">MySQL</a> <see cref="IStore"/> implementation.
-    /// This stores data in MySQL.
+    /// The <a href="https://www.mysql.com/">MySql</a> <see cref="IStore"/> implementation.
+    /// This stores data in MySql.
     /// </summary>
-    public class MySQLKeyValueStore : IKeyValueStore, IDisposable
+    public class MySqlKeyValueStore : IKeyValueStore, IDisposable
     {
         private readonly QueryFactory? _keyValueDb;
         private readonly MySqlCompiler _compiler;
@@ -24,11 +24,11 @@ namespace Libplanet.MySQLStore
         private readonly string _dbName;
 
         /// <summary>
-        /// Creates a new <see cref="MySQLKeyValueStore"/>.
+        /// Creates a new <see cref="MySqlKeyValueStore"/>.
         /// </summary>
-        /// <param name="options">The options for creating connection string to MySQL.</param>
-        /// <param name="dbName">The name of table in MySQL.</param>
-        public MySQLKeyValueStore(MySQLStoreOptions options, string dbName)
+        /// <param name="options">The options for creating connection string to MySql.</param>
+        /// <param name="dbName">The name of table in MySql.</param>
+        public MySqlKeyValueStore(MySqlStoreOptions options, string dbName)
         {
             var builder = new MySqlConnectionStringBuilder
             {
@@ -41,9 +41,9 @@ namespace Libplanet.MySQLStore
 
             _connectionString = builder.ConnectionString;
             _compiler = new MySqlCompiler();
-            _logger = Log.ForContext<MySQLKeyValueStore>();
+            _logger = Log.ForContext<MySqlKeyValueStore>();
             _dbName = dbName;
-            _keyValueDb = MySQLUtils.OpenMySQLDB(_connectionString, _compiler);
+            _keyValueDb = MySqlUtils.OpenMySqlDB(_connectionString, _compiler);
         }
 
         /// <inheritdoc/>

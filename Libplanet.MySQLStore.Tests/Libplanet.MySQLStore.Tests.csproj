@@ -58,6 +58,6 @@
     <PackageReference Include="System.ValueTuple" Version="4.5.0"/>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Libplanet.MySQLStore\Libplanet.MySQLStore.csproj"/>
+    <ProjectReference Include="..\Libplanet.MySqlStore\Libplanet.MySqlStore.csproj"/>
   </ItemGroup>
 </Project>

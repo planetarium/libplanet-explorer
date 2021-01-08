@@ -8,22 +8,22 @@ using Libplanet.Tests.Store;
 using Libplanet.Tests.Store.Trie;
 using Xunit;
 
-namespace Libplanet.MySQLStore.Tests
+namespace Libplanet.MySqlStore.Tests
 {
-    public class MySQLStoreTest : StoreTest, IDisposable
+    public class MySqlStoreTest : StoreTest, IDisposable
     {
-        private readonly MySQLStoreFixture _fx;
+        private readonly MySqlStoreFixture _fx;
 
-        public MySQLStoreTest()
+        public MySqlStoreTest()
         {
             try
             {
-                Fx = _fx = new MySQLStoreFixture();
-                FxConstructor = () => new MySQLStoreFixture();
+                Fx = _fx = new MySqlStoreFixture();
+                FxConstructor = () => new MySqlStoreFixture();
             }
             catch (TypeInitializationException)
             {
-                throw new SkipException("MySQL is not available.");
+                throw new SkipException("MySql is not available.");
             }
         }
 
@@ -35,7 +35,7 @@ namespace Libplanet.MySQLStore.Tests
         [SkippableFact]
         public void ReopenStoreAfterDispose()
         {
-            MySQLStoreOptions options = new MySQLStoreOptions(
+            MySqlStoreOptions options = new MySqlStoreOptions(
                 "libplanet.mysql-test",
                 "127.0.0.1",
                 3306,
@@ -44,7 +44,7 @@ namespace Libplanet.MySQLStore.Tests
 
             try
             {
-                var store = new MySQLStore(options);
+                var store = new MySqlStore(options);
                 var stateStore =
                     new TrieStateStore(new MemoryKeyValueStore(), new MemoryKeyValueStore());
                 var blocks = new BlockChain<DumbAction>(
@@ -58,7 +58,7 @@ namespace Libplanet.MySQLStore.Tests
             }
             finally
             {
-                var store = new MySQLStore(options);
+                var store = new MySqlStore(options);
                 store.Dispose();
             }
         }

@@ -9,20 +9,20 @@ using Libplanet.Store;
 using Libplanet.Tx;
 using LruCacheNet;
 using MySqlConnector;
-using MySQLStore.Models;
+using MySqlStore.Models;
 using Serilog;
 using SqlKata;
 using SqlKata.Compilers;
 using SqlKata.Execution;
 
-namespace Libplanet.MySQLStore
+namespace Libplanet.MySqlStore
 {
     /// <summary>
-    /// The <a href="https://www.mysql.com/">MySQL</a> <see cref="IStore"/> implementation.
-    /// This stores data in MySQL.
+    /// The <a href="https://www.mysql.com/">MySql</a> <see cref="IStore"/> implementation.
+    /// This stores data in MySql.
     /// </summary>
     /// <seealso cref="IStore"/>
-    public class MySQLStore : BaseStore
+    public class MySqlStore : BaseStore
     {
         private const string BlockDbName = "Block";
         private const string TxDbName = "Transaction";
@@ -49,13 +49,13 @@ namespace Libplanet.MySQLStore
         private readonly string _connectionString;
 
         /// <summary>
-        /// Creates a new <seealso cref="MySQLStore"/>.
+        /// Creates a new <seealso cref="MySqlStore"/>.
         /// </summary>
-        /// <param name="options">The options for creating connection string to MySQL.</param>
+        /// <param name="options">The options for creating connection string to MySql.</param>
         /// <param name="blockCacheSize">The capacity of the block cache.</param>
         /// <param name="txCacheSize">The capacity of the transaction cache.</param>
-        public MySQLStore(
-            MySQLStoreOptions options,
+        public MySqlStore(
+            MySqlStoreOptions options,
             int blockCacheSize = 512,
             int txCacheSize = 1024
         )
@@ -72,7 +72,7 @@ namespace Libplanet.MySQLStore
             _connectionString = builder.ConnectionString;
             _compiler = new MySqlCompiler();
 
-            _logger = Log.ForContext<MySQLStore>();
+            _logger = Log.ForContext<MySqlStore>();
             _txCache = new LruCache<TxId, object>(capacity: txCacheSize);
             _blockCache = new LruCache<HashDigest<SHA256>, BlockDigest>(capacity: blockCacheSize);
         }
@@ -112,7 +112,7 @@ namespace Libplanet.MySQLStore
             }
             catch (MySqlException e)
             {
-                _logger.Debug($"MySQl error code: {e}.", e);
+                _logger.Debug($"MySql error code: {e}.", e);
                 _logger.Debug($"No such chain ID in _chainDb: {chainId}.", chainId);
             }
         }
@@ -175,7 +175,7 @@ namespace Libplanet.MySQLStore
 
             return bytes is null
                 ? 0
-                : MySQLStoreBitConverter.ToInt64(bytes);
+                : MySqlStoreBitConverter.ToInt64(bytes);
         }
 
         /// <inheritdoc/>
@@ -187,7 +187,7 @@ namespace Libplanet.MySQLStore
             int count = 0;
             byte[] prefix = IndexKeyPrefix;
 
-            using QueryFactory db = MySQLUtils.OpenMySQLDB(_connectionString, _compiler);
+            using QueryFactory db = MySqlUtils.OpenMySqlDB(_connectionString, _compiler);
             Query query = db.Query(ChainDbName).Select().Where("Prefix", prefix);
             query = query.Offset(offset);
             IEnumerable<ChainModel> chains = query.Where("Cf", chainId.ToString()).Get<ChainModel>();
@@ -219,7 +219,7 @@ namespace Libplanet.MySQLStore
                 }
             }
 
-            byte[] indexBytes = MySQLStoreBitConverter.GetBytes(index);
+            byte[] indexBytes = MySqlStoreBitConverter.GetBytes(index);
 
             byte[] key = IndexKeyPrefix.Concat(indexBytes).ToArray();
 
@@ -249,7 +249,7 @@ namespace Libplanet.MySQLStore
         public override long AppendIndex(Guid chainId, HashDigest<SHA256> hash)
         {
             long index = CountIndex(chainId);
-            byte[] indexBytes = MySQLStoreBitConverter.GetBytes(index);
+            byte[] indexBytes = MySqlStoreBitConverter.GetBytes(index);
             byte[] key = IndexKeyPrefix.Concat(indexBytes).ToArray();
 
             QueryFactory db = new QueryFactory(new MySqlConnection(_connectionString), _compiler);
@@ -265,7 +265,7 @@ namespace Libplanet.MySQLStore
                     cf1 = chainId.ToString(),
                     prefix1 = IndexKeyPrefix,
                     key2 = IndexCountKey,
-                    value2 = MySQLStoreBitConverter.GetBytes(index + 1),
+                    value2 = MySqlStoreBitConverter.GetBytes(index + 1),
                     cf2 = chainId.ToString(),
                     prefix2 = IndexCountKey,
                 });
@@ -341,7 +341,7 @@ namespace Libplanet.MySQLStore
         {
             byte[] prefix = TxKeyPrefix;
 
-            using QueryFactory db = MySQLUtils.OpenMySQLDB(_connectionString, _compiler);
+            using QueryFactory db = MySqlUtils.OpenMySqlDB(_connectionString, _compiler);
             Query query = db.Query(TxDbName).Select(new[] { "Key", "Value" }).Where("Prefix", prefix);
             IEnumerable<TransactionModel> transactions = query.Get<TransactionModel>();
 
@@ -577,7 +577,7 @@ namespace Libplanet.MySQLStore
         {
             byte[] prefix = TxNonceKeyPrefix;
 
-            using QueryFactory db = MySQLUtils.OpenMySQLDB(_connectionString, _compiler);
+            using QueryFactory db = MySqlUtils.OpenMySqlDB(_connectionString, _compiler);
             Query query = db.Query(ChainDbName).Select().Where("Prefix", prefix);
             IEnumerable<ChainModel> txNonces = query.Where("Cf", chainId.ToString()).Get<ChainModel>();
 
@@ -585,7 +585,7 @@ namespace Libplanet.MySQLStore
             {
                 byte[] addressBytes = txNonce.Key.Skip(prefix.Length).ToArray();
                 Address address = new Address(addressBytes);
-                long nonce = MySQLStoreBitConverter.ToInt64(txNonce.Value);
+                long nonce = MySqlStoreBitConverter.ToInt64(txNonce.Value);
                 yield return new KeyValuePair<Address, long>(address, nonce);
             }
         }
@@ -611,7 +611,7 @@ namespace Libplanet.MySQLStore
 
             return bytes is null
                 ? 0
-                : MySQLStoreBitConverter.ToInt64(bytes);
+                : MySqlStoreBitConverter.ToInt64(bytes);
         }
 
         /// <inheritdoc/>
@@ -620,7 +620,7 @@ namespace Libplanet.MySQLStore
             long nextNonce = GetTxNonce(chainId, signer) + delta;
 
             byte[] key = TxNonceKey(signer);
-            byte[] bytes = MySQLStoreBitConverter.GetBytes(nextNonce);
+            byte[] bytes = MySqlStoreBitConverter.GetBytes(nextNonce);
 
             QueryFactory db = new QueryFactory(new MySqlConnection(_connectionString), _compiler);
 

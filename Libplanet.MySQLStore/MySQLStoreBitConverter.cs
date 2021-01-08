@@ -1,14 +1,14 @@
 using System;
 using System.Text;
 
-namespace Libplanet.MySQLStore
+namespace Libplanet.MySqlStore
 {
     /// <summary>
     /// Collection of wrapper methods to convert to byte-arrays from various types to store
-    /// <see cref="MySQLStore"/>.  Every integer data is converted to Big-endian, or
+    /// <see cref="MySqlStore"/>.  Every integer data is converted to Big-endian, or
     /// "Network Byte Order" to order index lexicographically.
     /// </summary>
-    internal static class MySQLStoreBitConverter
+    internal static class MySqlStoreBitConverter
     {
         /// <summary>
         /// Get <c>long</c> representation of the <paramref name="value"/>.

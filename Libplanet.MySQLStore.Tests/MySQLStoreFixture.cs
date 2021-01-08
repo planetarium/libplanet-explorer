@@ -2,34 +2,34 @@ using Libplanet.Store;
 using Libplanet.Store.Trie;
 using Libplanet.Tests.Store;
 
-namespace Libplanet.MySQLStore.Tests
+namespace Libplanet.MySqlStore.Tests
 {
-    public class MySQLStoreFixture : StoreFixture
+    public class MySqlStoreFixture : StoreFixture
     {
-        private readonly MySQLStore _store;
+        private readonly MySqlStore _store;
 
-        public MySQLStoreFixture()
+        public MySqlStoreFixture()
         {
-            Options = new MySQLStoreOptions(
+            Options = new MySqlStoreOptions(
                 "libplanet.mysql-test",
                 "127.0.0.1",
                 3306,
                 "root",
                 "root");
 
-            _store = new MySQLStore(Options, blockCacheSize: 2, txCacheSize: 2);
+            _store = new MySqlStore(Options, blockCacheSize: 2, txCacheSize: 2);
             Store = _store;
             StateStore = LoadTrieStateStore(Options);
         }
 
-        public MySQLStoreOptions Options { get; }
+        public MySqlStoreOptions Options { get; }
 
-        public IStateStore LoadTrieStateStore(MySQLStoreOptions Options)
+        public IStateStore LoadTrieStateStore(MySqlStoreOptions Options)
         {
             IKeyValueStore stateKeyValueStore =
-                new MySQLKeyValueStore(Options, "State");
+                new MySqlKeyValueStore(Options, "State");
             IKeyValueStore stateHashKeyValueStore =
-                new MySQLKeyValueStore(Options, "State_Hash");
+                new MySqlKeyValueStore(Options, "State_Hash");
             return new TrieStateStore(stateKeyValueStore, stateHashKeyValueStore);
         }
 

@@ -1,8 +1,8 @@
-namespace Libplanet.MySQLStore
+namespace Libplanet.MySqlStore
 {
-    public readonly struct MySQLStoreOptions
+    public readonly struct MySqlStoreOptions
     {
-        public MySQLStoreOptions(
+        public MySqlStoreOptions(
             string database, string server, uint port, string username, string password)
         {
             Database = database;

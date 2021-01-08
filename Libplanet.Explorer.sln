@@ -9,9 +9,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Libplanet.Explorer.Executab
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Libplanet.Explorer.UnitTests", "Libplanet.Explorer.UnitTests\Libplanet.Explorer.UnitTests.csproj", "{48A7AC8E-2CB5-403B-8A18-11F493079619}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Libplanet.MySQLStore", "Libplanet.MySQLStore\Libplanet.MySQLStore.csproj", "{D0D4367A-333A-4C70-A4C3-64761FDC8848}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Libplanet.MySqlStore", "Libplanet.MySqlStore\Libplanet.MySqlStore.csproj", "{D0D4367A-333A-4C70-A4C3-64761FDC8848}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Libplanet.MySQLStore.Tests", "Libplanet.MySQLStore.Tests\Libplanet.MySQLStore.Tests.csproj", "{646EC307-ABD8-48A4-B2F3-040AA590D63A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Libplanet.MySqlStore.Tests", "Libplanet.MySqlStore.Tests\Libplanet.MySqlStore.Tests.csproj", "{646EC307-ABD8-48A4-B2F3-040AA590D63A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

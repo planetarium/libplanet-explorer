@@ -1,4 +1,4 @@
-namespace MySQLStore.Models
+namespace MySqlStore.Models
 {
     public class ChainModel
     {

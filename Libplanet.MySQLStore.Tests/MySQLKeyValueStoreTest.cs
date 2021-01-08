@@ -2,15 +2,15 @@ using System;
 using Libplanet.Tests.Store.Trie;
 using Xunit;
 
-namespace Libplanet.MySQLStore.Tests
+namespace Libplanet.MySqlStore.Tests
 {
-    public class MySQLKeyValueStoreTest : KeyValueStoreTest, IDisposable
+    public class MySqlKeyValueStoreTest : KeyValueStoreTest, IDisposable
     {
-        private readonly MySQLKeyValueStore _MySQLKeyValueStore;
+        private readonly MySqlKeyValueStore _MySqlKeyValueStore;
 
-        public MySQLKeyValueStoreTest()
+        public MySqlKeyValueStoreTest()
         {
-            MySQLStoreOptions options = new MySQLStoreOptions(
+            MySqlStoreOptions options = new MySqlStoreOptions(
                 "libplanet.mysql-test",
                 "127.0.0.1",
                 3306,
@@ -19,20 +19,20 @@ namespace Libplanet.MySQLStore.Tests
 
             try
             {
-                KeyValueStore = _MySQLKeyValueStore = new MySQLKeyValueStore(
+                KeyValueStore = _MySqlKeyValueStore = new MySqlKeyValueStore(
                     options,
                     "Test");
                 InitializePreStoredData();
             }
             catch (TypeInitializationException)
             {
-                throw new SkipException("MySQL is not available.");
+                throw new SkipException("MySql is not available.");
             }
         }
 
         public void Dispose()
         {
-            _MySQLKeyValueStore.Dispose();
+            _MySqlKeyValueStore.Dispose();
         }
     }
 }

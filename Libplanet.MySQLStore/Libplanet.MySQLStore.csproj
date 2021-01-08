@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <PackageId>Libplanet.MySQLStore</PackageId>
-    <Title>Libplanet.MySQLStore</Title>
-    <Summary>A Libplanet.IStore implementation using MySQL</Summary>
-    <Description>A Libplanet.IStore implementation using MySQL</Description>
+    <PackageId>Libplanet.MySqlStore</PackageId>
+    <Title>Libplanet.MySqlStore</Title>
+    <Summary>A Libplanet.IStore implementation using MySql</Summary>
+    <Description>A Libplanet.IStore implementation using MySql</Description>
     <PackageProjectUrl>https://libplanet.io/</PackageProjectUrl>
     <Authors>Planetarium</Authors>
     <Company>Planetarium</Company>
@@ -16,8 +16,8 @@
   <PropertyGroup>
     <LangVersion>8.0</LangVersion>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <RootNamespace>Libplanet.MySQLStore</RootNamespace>
-    <AssemblyName>Libplanet.MySQLStore</AssemblyName>
+    <RootNamespace>Libplanet.MySqlStore</RootNamespace>
+    <AssemblyName>Libplanet.MySqlStore</AssemblyName>
     <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <NoWarn>$(NoWarn);SA1314;SA1413;MEN002</NoWarn>
