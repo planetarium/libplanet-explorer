@@ -33,7 +33,7 @@ namespace Libplanet.MySqlStore.Tests
             return new TrieStateStore(stateKeyValueStore, stateHashKeyValueStore);
         }
 
-        public override void Dispose()
+        public void Dispose()
         {
             _store.Dispose();
         }

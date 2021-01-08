@@ -20,7 +20,7 @@
     <AssemblyName>Libplanet.MySqlStore</AssemblyName>
     <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <NoWarn>$(NoWarn);SA1314;SA1413;MEN002</NoWarn>
+    <NoWarn>$(NoWarn);SA1314;SA1413;MEN002;S3881</NoWarn>
     <CodeAnalysisRuleSet>..\Libplanet.Explorer.ruleset</CodeAnalysisRuleSet>
     <IsTestProject>false</IsTestProject>
   </PropertyGroup>

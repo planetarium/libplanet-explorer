@@ -1,0 +1,36 @@
+{
+   // Use IntelliSense to find out which attributes exist for C# debugging
+   // Use hover for the description of the existing attributes
+   // For further information visit https://github.com/OmniSharp/omnisharp-vscode/blob/master/debugger-launchjson.md
+   "version": "0.2.0",
+   "configurations": [
+        {
+            "name": ".NET Core Launch (console)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            // If you have changed target frameworks, make sure to update the program path.
+            "program": "${workspaceFolder}/Libplanet.Explorer.Executable/bin/Debug/netcoreapp3.1/Libplanet.Explorer.Executable.dll",
+            "args": ["--store-path", "/Users/kidonseo/.local/share/planetarium/libplanet-explorer/", "--store-type", "rocksdb",
+                "-s", "027bd36895d68681290e570692ad3736750ceaab37be402442ffb203967f98f7b6,9c-main-seed-1.planetarium.dev,31234",
+                "-I", "turn://0ed3e48007413e7c2e638f13ddd75ad272c6c507e081bd76a75e4b7adc86c9af:0apejou+ycZFfwtREeXFKdfLj2gCclKzz5ZJ49Cmy6I=@turn-us2.planetarium.dev:3478",
+                "-G", "https://9c-test.s3.ap-northeast-2.amazonaws.com/genesis-block-9c-main", 
+                "-V", "100024/6ec8E598962F1f475504F82fD5bF3410eAE58B9B/MEQCICw+Y4inFWwj4miCicrWvOYll.yk7MTBff3.skDEHhUeAiB91ivfR5p6K4btumMKIv3Bs9tSezgQcDnaIfRXhPjnyw==/ZHUxNjpXaW5kb3dzQmluYXJ5VXJsdTU2Omh0dHBzOi8vZG93bmxvYWQubmluZS1jaHJvbmljbGVzLmNvbS92MTAwMDI0L1dpbmRvd3MuemlwdTE0Om1hY09TQmluYXJ5VXJsdTU3Omh0dHBzOi8vZG93bmxvYWQubmluZS1jaHJvbmljbGVzLmNvbS92MTAwMDI0L21hY09TLnRhci5nenU5OnRpbWVzdGFtcHUxMDoyMDIwLTEyLTE4ZQ==",
+                "-D", "2048", "-m", "100000", "-i", "8000", "-d",
+                "--mysql-server", "localhost", "--mysql-port", "3306",
+                "--mysql-username", "root", "--mysql-password", "root",
+                "--mysql-database", "libplanet.mysql"
+            ],
+            "cwd": "${workspaceFolder}/Libplanet.Explorer.Executable",
+            // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        }
+    ]
+}
