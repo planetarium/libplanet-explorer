@@ -6,25 +6,25 @@ namespace MySqlStore.Models
 
         public string Hash { get; set; }
 
-        public string Pre_evaluation_hash { get; set; }
+        public string PreEvaluationHash { get; set; }
 
-        public string State_root_hash { get; set; }
+        public string StateRootHash { get; set; }
 
         public long Difficulty { get; set; }
 
-        public long Total_difficulty { get; set; }
+        public long TotalDifficulty { get; set; }
 
         public string Nonce { get; set; }
 
         public string Miner { get; set; }
 
-        public string Previous_hash { get; set; }
+        public string PreviousHash { get; set; }
 
         public string Timestamp { get; set; }
 
-        public string Tx_hash { get; set; }
+        public string TxHash { get; set; }
 
-        public string Byte_length { get; set; }
+        public string ByteLength { get; set; }
 
         public byte[] Key { get; set; }
 

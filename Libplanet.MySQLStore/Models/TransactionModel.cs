@@ -12,11 +12,11 @@ namespace MySqlStore.Models
 
         public string Timestamp { get; set; }
 
-        public string Public_key { get; set; }
+        public string PublicKey { get; set; }
 
-        public string Genesis_hash { get; set; }
+        public string GenesisHash { get; set; }
 
-        public string Bytes_length { get; set; }
+        public string BytesLength { get; set; }
 
         public byte[] Key { get; set; }
 
