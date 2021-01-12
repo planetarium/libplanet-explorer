@@ -26,7 +26,7 @@ namespace Libplanet.MySqlStore.Tests
             }
             catch (TypeInitializationException)
             {
-                throw new SkipException("MySql is not available.");
+                throw new SkipException("MySQL is not available.");
             }
         }
 
