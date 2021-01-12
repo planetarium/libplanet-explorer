@@ -47,6 +47,8 @@
     <PackageReference Include="xunit.extensibility.execution" Version="2.4.1"/>
     <PackageReference Include="xunit.runner.visualstudio" Version="2.4.1"/>
     <PackageReference Include="Libplanet" Version="0.10.2"/>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="5.0.0"/>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="5.0.0"/>
   </ItemGroup>
   <ItemGroup Condition="'$(SkipSonar)' != 'true'">
     <PackageReference Include="SonarAnalyzer.CSharp" Version="8.12.0.21095">

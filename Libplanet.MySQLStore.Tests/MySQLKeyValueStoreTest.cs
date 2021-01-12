@@ -1,5 +1,6 @@
 using System;
 using Libplanet.Tests.Store.Trie;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Libplanet.MySqlStore.Tests
@@ -10,12 +11,17 @@ namespace Libplanet.MySqlStore.Tests
 
         public MySqlKeyValueStoreTest()
         {
+            var config = new ConfigurationBuilder()
+                .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+                .AddJsonFile("AppSettings.json").Build();
+            var dbConfig = config.Get<DatabaseConfig>();
+
             MySqlStoreOptions options = new MySqlStoreOptions(
-                "libplanet.mysql-test",
-                "127.0.0.1",
-                3306,
-                "root",
-                "root");
+                dbConfig.Database,
+                dbConfig.Server,
+                dbConfig.Port,
+                dbConfig.UserId,
+                dbConfig.Password);
 
             try
             {
@@ -33,6 +39,19 @@ namespace Libplanet.MySqlStore.Tests
         public void Dispose()
         {
             _MySqlKeyValueStore.Dispose();
+        }
+
+        public class DatabaseConfig
+        {
+            public string Database { get; set; }
+
+            public string Server { get; set; }
+
+            public uint Port { get; set; }
+
+            public string UserId { get; set; }
+
+            public string Password { get; set; }
         }
     }
 }
