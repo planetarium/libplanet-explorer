@@ -2,8 +2,8 @@
   <PropertyGroup>
     <PackageId>Libplanet.MySqlStore</PackageId>
     <Title>Libplanet.MySqlStore</Title>
-    <Summary>A Libplanet.IStore implementation using MySql</Summary>
-    <Description>A Libplanet.IStore implementation using MySql</Description>
+    <Summary>A Libplanet.IStore implementation using MySQL</Summary>
+    <Description>A Libplanet.IStore implementation using MySQL</Description>
     <PackageProjectUrl>https://libplanet.io/</PackageProjectUrl>
     <Authors>Planetarium</Authors>
     <Company>Planetarium</Company>
