@@ -49,7 +49,7 @@ namespace Libplanet.MySqlStore
         /// <inheritdoc/>
         public byte[] Get(byte[] key)
         {
-            var value = Select<KeyValueModel, byte[]>(_dbName, "Key", key);
+            var value = Select<KeyValueModel>(_dbName, "Key", key);
 
             if (!value.Any())
             {
@@ -91,7 +91,7 @@ namespace Libplanet.MySqlStore
         /// <inheritdoc/>
         public bool Exists(byte[] key)
         {
-            var values = Select<KeyValueModel, byte[]>(_dbName, "Key", key);
+            var values = Select<KeyValueModel>(_dbName, "Key", key);
 
             if (values is null)
             {
@@ -122,10 +122,10 @@ namespace Libplanet.MySqlStore
             }
         }
 
-        private IList<T> Select<T, U>(
+        private IList<T> Select<T>(
             string tableName,
             string? column,
-            U id)
+            byte[] id)
         {
             QueryFactory db = new QueryFactory(new MySqlConnection(_connectionString), _compiler);
             try
