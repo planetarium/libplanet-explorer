@@ -17,7 +17,7 @@ namespace Libplanet.MySqlStore
     /// </summary>
     public class MySqlKeyValueStore : IKeyValueStore, IDisposable
     {
-        private readonly QueryFactory? _keyValueDb;
+        private readonly QueryFactory _db;
         private readonly MySqlCompiler _compiler;
         private readonly string _connectionString;
         private readonly ILogger _logger;
@@ -43,7 +43,7 @@ namespace Libplanet.MySqlStore
             _compiler = new MySqlCompiler();
             _logger = Log.ForContext<MySqlKeyValueStore>();
             _dbName = dbName;
-            _keyValueDb = MySqlUtils.OpenMySqlDB(_connectionString, _compiler);
+            _db = MySqlUtils.OpenMySqlDB(_connectionString, _compiler);
         }
 
         /// <inheritdoc/>
@@ -127,10 +127,9 @@ namespace Libplanet.MySqlStore
             string? column,
             byte[] id)
         {
-            QueryFactory db = new QueryFactory(new MySqlConnection(_connectionString), _compiler);
             try
             {
-                var rows = db.Query(tableName).Where(column, id).Get<T>();
+                var rows = _db.Query(tableName).Where(column, id).Get<T>();
                 return rows.ToList();
             }
             catch (MySqlException e)
@@ -142,10 +141,9 @@ namespace Libplanet.MySqlStore
 
         private IList<T> SelectAll<T>(string tableName, string column)
         {
-            QueryFactory db = new QueryFactory(new MySqlConnection(_connectionString), _compiler);
             try
             {
-                var rows = db.Query(tableName).WhereNotNull(column).Get<T>();
+                var rows = _db.Query(tableName).WhereNotNull(column).Get<T>();
                 return rows.ToList();
             }
             catch (MySqlException e)
@@ -157,10 +155,9 @@ namespace Libplanet.MySqlStore
 
         private void Insert<T>(string tableName, IReadOnlyDictionary<string, object> data, string? key, T value)
         {
-            QueryFactory db = new QueryFactory(new MySqlConnection(_connectionString), _compiler);
             try
             {
-                db.Query(tableName).Insert(data);
+                _db.Query(tableName).Insert(data);
             }
             catch (MySqlException e)
             {
@@ -181,10 +178,9 @@ namespace Libplanet.MySqlStore
 
         private void Update<T>(string tableName, IReadOnlyDictionary<string, object> data, string key, T value)
         {
-            QueryFactory db = new QueryFactory(new MySqlConnection(_connectionString), _compiler);
             try
             {
-                db.Query(tableName).Where(key, value).Update(data);
+                _db.Query(tableName).Where(key, value).Update(data);
             }
             catch (MySqlException e)
             {
@@ -201,10 +197,9 @@ namespace Libplanet.MySqlStore
 
         private void Delete<T>(string tableName, string column, T id)
         {
-            QueryFactory db = new QueryFactory(new MySqlConnection(_connectionString), _compiler);
             try
             {
-                db.Query(tableName).Where(column, id).Delete();
+                _db.Query(tableName).Where(column, id).Delete();
             }
             catch (MySqlException e)
             {
