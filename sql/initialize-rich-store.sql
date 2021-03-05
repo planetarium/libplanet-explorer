@@ -21,3 +21,33 @@ CREATE TABLE IF NOT EXISTS `updated_address_references` (
     `tx_id`             BINARY(32),
     `tx_nonce`          BIGINT
 );
+
+CREATE TABLE IF NOT EXISTS `block` (
+  `index`                 BIGINT,
+  `hash`                  BINARY(32),
+  `pre_evaluation_hash`   BINARY(32),
+  `state_root_hash`       BINARY(32),
+  `difficulty`            BIGINT,
+  `total_difficulty`      BIGINT,
+  `nonce`                 BINARY(32),
+  `miner`                 BINARY(32),
+  `previous_hash`         BINARY(32),
+  `timestamp`             VARCHAR,
+  `tx_hash`               BINARY(32),
+  `bytes_length`          INT,
+    PRIMARY KEY (`hash`),
+    UNIQUE INDEX `hash_UNIQUE` (`hash` ASC)
+);
+
+CREATE TABLE IF NOT EXISTS `transaction` (
+  `tx_id`               BINARY(32),
+  `nonce`               BIGINT,
+  `signer`              BINARY(20),
+  `signature`           BINARY(71),
+  `timestamp`           VARCHAR,
+  `public_key`          VARCHAR,
+  `genesis_hash`        BINARY(32),
+  `bytes_length`        INT,
+  PRIMARY KEY (`tx_id`),
+  UNIQUE INDEX `tx_id_UNIQUE` (`tx_id` ASC)
+);

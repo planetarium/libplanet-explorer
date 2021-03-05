@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Data;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using Bencodex.Types;
@@ -10,6 +12,7 @@ using Libplanet.Store;
 using Libplanet.Tx;
 using LruCacheNet;
 using MySqlConnector;
+using MySqlStore.Models;
 using Serilog;
 using SqlKata;
 using SqlKata.Compilers;
@@ -20,9 +23,11 @@ namespace Libplanet.Explorer.Store
     // It assumes running Explorer as online-mode.
     public class MySQLRichStore : IRichStore
     {
-        private const string TxRefDbName = "block_ref";
-        private const string SignerRefDbName = "signer_ref";
-        private const string UpdatedAddressRefDbName = "updated_address_ref";
+        private const string BlockDbName = "block";
+        private const string TxDbName = "transaction";
+        private const string TxRefDbName = "tx_references";
+        private const string SignerRefDbName = "signer_references";
+        private const string UpdatedAddressRefDbName = "updated_address_references";
 
         private readonly LruCache<HashDigest<SHA256>, BlockDigest> _blockCache;
 
@@ -31,6 +36,8 @@ namespace Libplanet.Explorer.Store
 
         private readonly MySqlCompiler _compiler;
         private readonly string _connectionString;
+
+        private string _filePath;
 
         public MySQLRichStore(IStore store, MySQLRichStoreOptions options)
         {
@@ -43,6 +50,7 @@ namespace Libplanet.Explorer.Store
                 Password = options.Password,
                 Server = options.Server,
                 Port = options.Port,
+                AllowLoadLocalInfile = true,
             };
 
             _connectionString = builder.ConnectionString;
@@ -82,9 +90,16 @@ namespace Libplanet.Explorer.Store
         /// <inheritdoc cref="IStore"/>
         public bool DeleteBlock(HashDigest<SHA256> blockHash)
         {
+            if (!Select<BlockModel>(BlockDbName, "hash", blockHash.ToByteArray()).Any())
+            {
+                return false;
+            }
+
+            Delete(BlockDbName, "hash", blockHash.ToByteArray());
             _blockCache.Remove(blockHash);
 
-            return _store.DeleteBlock(blockHash);
+            _store.DeleteBlock(blockHash);
+            return true;
         }
 
         /// <inheritdoc cref="IStore"/>
@@ -144,6 +159,26 @@ namespace Libplanet.Explorer.Store
                 PutTransaction(tx);
                 StoreTxReferences(tx.Id, block.Hash, tx.Nonce);
             }
+
+            Insert(
+                BlockDbName,
+                new Dictionary<string, object>
+                {
+                    ["index"] = block.Index,
+                    ["hash"] = block.Hash.ToByteArray(),
+                    ["pre_evaluation_hash"] = block.PreEvaluationHash.ToByteArray(),
+                    ["state_root_hash"] = block.StateRootHash?.ToByteArray(),
+                    ["difficulty"] = block.Difficulty,
+                    ["total_difficulty"] = (long)block.TotalDifficulty,
+                    ["nonce"] = block.Nonce.ToByteArray(),
+                    ["miner"] = block.Miner?.ToByteArray(),
+                    ["previous_hash"] = block.PreviousHash?.ToByteArray(),
+                    ["timestamp"] = block.Timestamp.ToString(),
+                    ["tx_hash"] = block.TxHash?.ToByteArray(),
+                    ["bytes_length"] = block.BytesLength,
+                },
+                "index",
+                block.Index);
         }
 
         /// <inheritdoc cref="IStore"/>
@@ -240,7 +275,16 @@ namespace Libplanet.Explorer.Store
         /// <inheritdoc cref="IStore"/>
         public bool DeleteTransaction(TxId txid)
         {
-            return _store.DeleteTransaction(txid);
+            if (!Select<TransactionModel>(TxDbName, "tx_id", txid.ToByteArray()).Any())
+            {
+                return false;
+            }
+
+            Delete(TxDbName, "tx_id", txid.ToByteArray());
+            Delete(UpdatedAddressRefDbName, "tx_id", txid.ToByteArray());
+
+            _store.DeleteTransaction(txid);
+            return true;
         }
 
         /// <inheritdoc cref="IStore"/>
@@ -259,16 +303,55 @@ namespace Libplanet.Explorer.Store
         public void PutTransaction<T>(Transaction<T> tx)
             where T : IAction, new()
         {
+            // bulk load data into `updated_address_references`
+            _filePath = Path.GetTempFileName();
+
+            MySqlConnection conn = new MySqlConnection(_connectionString);
+            StreamWriter bulkFile = new StreamWriter(_filePath);
+
+            foreach (Address addr in tx.UpdatedAddresses)
+            {
+                bulkFile.WriteLine(
+                    $"{ByteUtil.Hex(addr.ToByteArray())}," +
+                    $"{ByteUtil.Hex(tx.Id.ToByteArray())}," +
+                    $"{tx.Nonce}");
+            }
+
+            bulkFile.Flush();
+            bulkFile.Close();
+
+            MySqlBulkLoader loader = new MySqlBulkLoader(conn)
+            {
+                TableName = UpdatedAddressRefDbName,
+                FileName = _filePath,
+                Timeout = 0,
+                FieldTerminator = ",",
+                FieldQuotationCharacter = '"',
+                FieldQuotationOptional = true,
+                Local = true,
+            };
+
+            int count = loader.Load();
+
+            // insert data into `transaction`
+            Insert(
+                TxDbName,
+                new Dictionary<string, object>
+                {
+                    ["tx_id"] = tx.Id.ToByteArray(),
+                    ["nonce"] = tx.Nonce,
+                    ["signer"] = tx.Signer.ToByteArray(),
+                    ["signature"] = tx.Signature,
+                    ["timestamp"] = tx.Timestamp.ToString(),
+                    ["public_key"] = ByteUtil.Hex(tx.PublicKey.Format(true)),
+                    ["genesis_hash"] = tx.GenesisHash?.ToByteArray(),
+                    ["bytes_length"] = tx.BytesLength,
+                },
+                "tx_id",
+                tx.Id.ToByteArray());
+
             _store.PutTransaction(tx);
             StoreSignerReferences(tx.Id, tx.Nonce, tx.Signer);
-            InsertMany(
-                "updated_address_references",
-                new[] { "updated_address", "tx_id", "tx_nonce" },
-                tx.UpdatedAddresses.Select(
-                    addr => new object[]
-                    {
-                        addr.ToByteArray(), tx.Id.ToByteArray(), tx.Nonce,
-                    }));
         }
 
         public void SetBlockPerceivedTime(
@@ -278,14 +361,18 @@ namespace Libplanet.Explorer.Store
             _store.SetBlockPerceivedTime(blockHash, perceivedTime);
         }
 
-        public void StoreTxReferences(TxId txId, HashDigest<SHA256> blockHash,  long txNonce)
+        public void StoreTxReferences(TxId txId, HashDigest<SHA256> blockHash, long txNonce)
         {
-            Insert("tx_references", new Dictionary<string, object>
-            {
-                ["tx_id"] = txId.ToByteArray(),
-                ["tx_nonce"] = txNonce,
-                ["block_hash"] = blockHash.ToByteArray(),
-            });
+           Insert(
+                TxRefDbName,
+                new Dictionary<string, object>
+                {
+                    ["tx_id"] = txId.ToByteArray(),
+                    ["tx_nonce"] = txNonce,
+                    ["block_hash"] = blockHash.ToByteArray(),
+                },
+                "tx_id",
+                txId.ToByteArray());
         }
 
         public IEnumerable<ValueTuple<TxId, HashDigest<SHA256>>> IterateTxReferences(
@@ -295,7 +382,7 @@ namespace Libplanet.Explorer.Store
             int limit = int.MaxValue)
         {
             using QueryFactory db = OpenDB();
-            Query query = db.Query("tx_references").Select(new[] { "tx_id", "block_hash" });
+            Query query = db.Query(TxRefDbName).Select(new[] { "tx_id", "block_hash" });
             if (!(txId is null))
             {
                 query = query.Where("tx_id", txId?.ToByteArray());
@@ -310,12 +397,16 @@ namespace Libplanet.Explorer.Store
 
         public void StoreSignerReferences(TxId txId, long txNonce, Address signer)
         {
-            Insert("signer_references", new Dictionary<string, object>
-            {
-                ["signer"] = signer.ToByteArray(),
-                ["tx_id"] = txId.ToByteArray(),
-                ["tx_nonce"] = txNonce,
-            });
+            Insert(
+                SignerRefDbName,
+                new Dictionary<string, object>
+                {
+                    ["signer"] = signer.ToByteArray(),
+                    ["tx_id"] = txId.ToByteArray(),
+                    ["tx_nonce"] = txNonce,
+                },
+                "tx_id",
+                txId.ToByteArray());
         }
 
         public IEnumerable<TxId> IterateSignerReferences(
@@ -325,7 +416,7 @@ namespace Libplanet.Explorer.Store
             int limit = int.MaxValue)
         {
             using QueryFactory db = OpenDB();
-            var query = db.Query("signer_references").Where("signer", signer.ToByteArray())
+            var query = db.Query(SignerRefDbName).Where("signer", signer.ToByteArray())
                 .Offset(offset)
                 .Limit(limit)
                 .Select("tx_id");
@@ -340,12 +431,16 @@ namespace Libplanet.Explorer.Store
             long txNonce,
             Address updatedAddress)
         {
-            Insert("updated_address_references", new Dictionary<string, object>
-            {
-                ["updated_address"] = updatedAddress.ToByteArray(),
-                ["tx_id"] = txId.ToByteArray(),
-                ["tx_nonce"] = txNonce,
-            });
+            Insert(
+                UpdatedAddressRefDbName,
+                new Dictionary<string, object>
+                {
+                    ["updated_address"] = updatedAddress.ToByteArray(),
+                    ["tx_id"] = txId.ToByteArray(),
+                    ["tx_nonce"] = txNonce,
+                },
+                "tx_id",
+                txId.ToByteArray());
         }
 
         public IEnumerable<TxId> IterateUpdatedAddressReferences(
@@ -355,7 +450,7 @@ namespace Libplanet.Explorer.Store
             int limit = int.MaxValue)
         {
             using QueryFactory db = OpenDB();
-            var query = db.Query("updated_address_references")
+            var query = db.Query(UpdatedAddressRefDbName)
                 .Where("updated_address", updatedAddress.ToByteArray())
                 .Offset(offset)
                 .Limit(limit)
@@ -369,7 +464,29 @@ namespace Libplanet.Explorer.Store
         private QueryFactory OpenDB() =>
             new QueryFactory(new MySqlConnection(_connectionString), _compiler);
 
-        private void Insert(string tableName, IReadOnlyDictionary<string, object> data)
+        private IList<T> Select<T>(
+            string tableName,
+            string column,
+            byte[] id)
+        {
+            using QueryFactory db = OpenDB();
+            try
+            {
+                var rows = db.Query(tableName).Where(column, id).Get<T>();
+                return rows.ToList();
+            }
+            catch (MySqlException e)
+            {
+                Log.Debug(e.ErrorCode.ToString());
+                throw;
+            }
+        }
+
+        private void Insert<T>(
+            string tableName,
+            IReadOnlyDictionary<string, object> data,
+            string key,
+            T value)
         {
             using QueryFactory db = OpenDB();
             try
@@ -378,10 +495,14 @@ namespace Libplanet.Explorer.Store
             }
             catch (MySqlException e)
             {
-                Log.Debug(e.ErrorCode.ToString());
                 if (e.ErrorCode == MySqlErrorCode.DuplicateKeyEntry)
                 {
-                    Log.Debug("Ignore DuplicateKeyEntry");
+                    if (key != null && value != null)
+                    {
+                        Update(tableName, data, key, value);
+                    }
+
+                    Log.Debug($"Update DuplicateKeyEntry in {tableName}");
                 }
                 else
                 {
@@ -410,6 +531,44 @@ namespace Libplanet.Explorer.Store
                 {
                     throw;
                 }
+            }
+        }
+
+        private void Update<T>(
+            string tableName,
+            IReadOnlyDictionary<string, object> data,
+            string key,
+            T value)
+        {
+            using QueryFactory db = OpenDB();
+            try
+            {
+                db.Query(tableName).Where(key, value).Update(data);
+            }
+            catch (MySqlException e)
+            {
+                if (e.ErrorCode == MySqlErrorCode.DuplicateKeyEntry)
+                {
+                    Log.Debug($"Ignore DuplicateKeyEntry in {tableName}");
+                }
+                else
+                {
+                    throw;
+                }
+            }
+        }
+
+        private void Delete<T>(string tableName, string column, T id)
+        {
+            using QueryFactory db = OpenDB();
+            try
+            {
+                db.Query(tableName).Where(column, id).Delete();
+            }
+            catch (MySqlException e)
+            {
+                Log.Debug(e.Message);
+                throw;
             }
         }
     }
