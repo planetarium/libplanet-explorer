@@ -4,26 +4,26 @@ namespace MySqlStore.Models
     {
         public int Index { get; set; }
 
-        public byte[] Hash { get; set; }
+        public string Hash { get; set; }
 
-        public byte[] PreEvaluationHash { get; set; }
+        public string PreEvaluationHash { get; set; }
 
-        public byte[] StateRootHash { get; set; }
+        public string StateRootHash { get; set; }
 
         public long Difficulty { get; set; }
 
         public long TotalDifficulty { get; set; }
 
-        public byte[] Nonce { get; set; }
+        public string Nonce { get; set; }
 
-        public byte[] Miner { get; set; }
+        public string Miner { get; set; }
 
-        public byte[] PreviousHash { get; set; }
+        public string PreviousHash { get; set; }
 
         public string Timestamp { get; set; }
 
-        public byte[] TxHash { get; set; }
+        public string TxHash { get; set; }
 
-        public int ByteLength { get; set; }
+        public int ProtocolVersion { get; set; }
     }
 }
