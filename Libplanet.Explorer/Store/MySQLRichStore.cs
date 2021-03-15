@@ -5,6 +5,7 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using Bencodex.Types;
 using Libplanet.Action;
 using Libplanet.Blocks;
@@ -36,8 +37,6 @@ namespace Libplanet.Explorer.Store
 
         private readonly MySqlCompiler _compiler;
         private readonly string _connectionString;
-
-        private string _filePath;
 
         public MySQLRichStore(IStore store, MySQLRichStoreOptions options)
         {
@@ -90,12 +89,12 @@ namespace Libplanet.Explorer.Store
         /// <inheritdoc cref="IStore"/>
         public bool DeleteBlock(HashDigest<SHA256> blockHash)
         {
-            if (!Select<BlockModel>(BlockDbName, "hash", blockHash.ToByteArray()).Any())
+            if (!Select<BlockModel, string>(BlockDbName, "hash", blockHash.ToString()).Any())
             {
                 return false;
             }
 
-            Delete(BlockDbName, "hash", blockHash.ToByteArray());
+            Delete(BlockDbName, "hash", blockHash.ToString());
             _blockCache.Remove(blockHash);
 
             _store.DeleteBlock(blockHash);
@@ -160,25 +159,35 @@ namespace Libplanet.Explorer.Store
                 StoreTxReferences(tx.Id, block.Hash, tx.Nonce);
             }
 
-            Insert(
-                BlockDbName,
-                new Dictionary<string, object>
-                {
-                    ["index"] = block.Index,
-                    ["hash"] = block.Hash.ToByteArray(),
-                    ["pre_evaluation_hash"] = block.PreEvaluationHash.ToByteArray(),
-                    ["state_root_hash"] = block.StateRootHash?.ToByteArray(),
-                    ["difficulty"] = block.Difficulty,
-                    ["total_difficulty"] = (long)block.TotalDifficulty,
-                    ["nonce"] = block.Nonce.ToByteArray(),
-                    ["miner"] = block.Miner?.ToByteArray(),
-                    ["previous_hash"] = block.PreviousHash?.ToByteArray(),
-                    ["timestamp"] = block.Timestamp.ToString(),
-                    ["tx_hash"] = block.TxHash?.ToByteArray(),
-                    ["bytes_length"] = block.BytesLength,
-                },
-                "index",
-                block.Index);
+            string blockFilePath = Path.GetTempFileName();
+            using StreamWriter blockBulkFile = new StreamWriter(blockFilePath);
+            try
+            {
+                blockBulkFile.WriteLine(
+                    $"{block.Index}," +
+                    $"{block.Hash.ToString()}," +
+                    $"{block.PreEvaluationHash.ToString()}," +
+                    $"{block.StateRootHash?.ToString()}," +
+                    $"{block.Difficulty}," +
+                    $"{(long)block.TotalDifficulty}," +
+                    $"{block.Nonce.ToString()}," +
+                    $"{block.Miner?.ToString()}," +
+                    $"{block.PreviousHash?.ToString()}," +
+                    $"{block.Timestamp.ToString()}," +
+                    $"{block.TxHash?.ToString()}," +
+                    $"{block.ProtocolVersion}");
+                blockBulkFile.Flush();
+                blockBulkFile.Close();
+                BulkInsert(BlockDbName, blockFilePath);
+            }
+            catch (Exception e)
+            {
+                Log.Debug(e.Message);
+            }
+            finally
+            {
+                blockBulkFile.Dispose();
+            }
         }
 
         /// <inheritdoc cref="IStore"/>
@@ -275,12 +284,12 @@ namespace Libplanet.Explorer.Store
         /// <inheritdoc cref="IStore"/>
         public bool DeleteTransaction(TxId txid)
         {
-            if (!Select<TransactionModel>(TxDbName, "tx_id", txid.ToByteArray()).Any())
+            if (!Select<TransactionModel, string>(TxDbName, "tx_id", txid.ToHex()).Any())
             {
                 return false;
             }
 
-            Delete(TxDbName, "tx_id", txid.ToByteArray());
+            Delete(TxDbName, "tx_id", txid.ToHex());
             Delete(UpdatedAddressRefDbName, "tx_id", txid.ToByteArray());
 
             _store.DeleteTransaction(txid);
@@ -300,58 +309,162 @@ namespace Libplanet.Explorer.Store
             return _store.GetBlock<T>(blockHash);
         }
 
+        public IEnumerable<HashDigest<SHA256>> GetBlockHashes(
+            bool desc,
+            int offset,
+            int? limit,
+            Address? miner)
+        {
+            using QueryFactory db = OpenDB();
+            if (!(miner is null))
+            {
+                if (limit != null)
+                {
+                    var query = db.Query(BlockDbName).Where("miner", miner.ToString())
+                        .Offset(offset)
+                        .Limit((int)limit)
+                        .Select("hash");
+                    query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
+                    return query.OrderBy("index")
+                        .Get<string>()
+                        .Select(hashString => new HashDigest<SHA256>(
+                            ByteUtil.ParseHex(hashString)));
+                }
+                else
+                {
+                    var query = db.Query(BlockDbName).Where("miner", miner.ToString())
+                        .Offset(offset)
+                        .Select("hash");
+                    query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
+                    return query.OrderBy("index")
+                        .Get<string>()
+                        .Select(hashString => new HashDigest<SHA256>(
+                            ByteUtil.ParseHex(hashString)));
+                }
+            }
+            else
+            {
+                if (limit != null)
+                {
+                    var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
+                        db.Query(BlockDbName).OrderBy("index");
+                    query = query.Offset(offset).Select("hash");
+                    return query.OrderBy("index")
+                        .Get<string>()
+                        .Select(hashString => new HashDigest<SHA256>(
+                            ByteUtil.ParseHex(hashString)));
+                }
+                else
+                {
+                    var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
+                        db.Query(BlockDbName).OrderBy("index");
+                    query = query.Offset(offset).Limit((int)limit).Select("hash");
+                    return query.OrderBy("index")
+                        .Get<string>()
+                        .Select(hashString => new HashDigest<SHA256>(
+                            ByteUtil.ParseHex(hashString)));
+                }
+            }
+        }
+
+        public IEnumerable<HashDigest<SHA256>> GetBlockHashesWithTx(
+            bool desc,
+            int offset,
+            int? limit,
+            Address? miner)
+        {
+            using QueryFactory db = OpenDB();
+            if (!(miner is null))
+            {
+                if (limit != null)
+                {
+                    var query = db.Query(BlockDbName).Where("miner", miner.ToString())
+                        .WhereNot("tx_hash", string.Empty)
+                        .Offset(offset)
+                        .Limit((int)limit)
+                        .Select("hash");
+                    query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
+                    return query.OrderBy("index")
+                        .Get<string>()
+                        .Select(hashString => new HashDigest<SHA256>(
+                            ByteUtil.ParseHex(hashString)));
+                }
+                else
+                {
+                    var query = db.Query(BlockDbName).Where("miner", miner.ToString())
+                        .WhereNot("tx_hash", string.Empty)
+                        .Offset(offset)
+                        .Select("hash");
+                    query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
+                    return query.OrderBy("index")
+                        .Get<string>()
+                        .Select(hashString => new HashDigest<SHA256>(
+                            ByteUtil.ParseHex(hashString)));
+                }
+            }
+            else
+            {
+                if (limit != null)
+                {
+                    var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
+                        db.Query(BlockDbName).OrderBy("index");
+                    query = query
+                        .WhereNot("tx_hash", string.Empty)
+                        .Offset(offset)
+                        .Select("hash");
+                    return query.OrderBy("index")
+                        .Get<string>()
+                        .Select(hashString => new HashDigest<SHA256>(
+                            ByteUtil.ParseHex(hashString)));
+                }
+                else
+                {
+                    var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
+                        db.Query(BlockDbName).OrderBy("index");
+                    query = query
+                        .WhereNot("tx_hash", string.Empty)
+                        .Offset(offset)
+                        .Limit((int)limit)
+                        .Select("hash");
+                    return query.OrderBy("index")
+                        .Get<string>()
+                        .Select(hashString => new HashDigest<SHA256>(
+                            ByteUtil.ParseHex(hashString)));
+                }
+            }
+        }
+
         public void PutTransaction<T>(Transaction<T> tx)
             where T : IAction, new()
         {
-            // bulk load data into `updated_address_references`
-            _filePath = Path.GetTempFileName();
-
-            MySqlConnection conn = new MySqlConnection(_connectionString);
-            StreamWriter bulkFile = new StreamWriter(_filePath);
-
-            foreach (Address addr in tx.UpdatedAddresses)
-            {
-                bulkFile.WriteLine(
-                    $"{ByteUtil.Hex(addr.ToByteArray())}," +
-                    $"{ByteUtil.Hex(tx.Id.ToByteArray())}," +
-                    $"{tx.Nonce}");
-            }
-
-            bulkFile.Flush();
-            bulkFile.Close();
-
-            MySqlBulkLoader loader = new MySqlBulkLoader(conn)
-            {
-                TableName = UpdatedAddressRefDbName,
-                FileName = _filePath,
-                Timeout = 0,
-                FieldTerminator = ",",
-                FieldQuotationCharacter = '"',
-                FieldQuotationOptional = true,
-                Local = true,
-            };
-
-            int count = loader.Load();
-
-            // insert data into `transaction`
-            Insert(
-                TxDbName,
-                new Dictionary<string, object>
-                {
-                    ["tx_id"] = tx.Id.ToByteArray(),
-                    ["nonce"] = tx.Nonce,
-                    ["signer"] = tx.Signer.ToByteArray(),
-                    ["signature"] = tx.Signature,
-                    ["timestamp"] = tx.Timestamp.ToString(),
-                    ["public_key"] = ByteUtil.Hex(tx.PublicKey.Format(true)),
-                    ["genesis_hash"] = tx.GenesisHash?.ToByteArray(),
-                    ["bytes_length"] = tx.BytesLength,
-                },
-                "tx_id",
-                tx.Id.ToByteArray());
-
             _store.PutTransaction(tx);
+            StoreUpdatedAddressReferences(tx);
             StoreSignerReferences(tx.Id, tx.Nonce, tx.Signer);
+            string txFilePath = Path.GetTempFileName();
+            using StreamWriter txBulkFile = new StreamWriter(txFilePath);
+            try
+            {
+                txBulkFile.WriteLine(
+                    $"{tx.Id.ToString()}," +
+                    $"{tx.Nonce}," +
+                    $"{tx.Signer.ToString()}," +
+                    $"{ByteUtil.Hex(tx.Signature)}," +
+                    $"{tx.Timestamp.ToString()}," +
+                    $"{ByteUtil.Hex(tx.PublicKey.Format(true))}," +
+                    $"{tx.GenesisHash?.ToString()}," +
+                    $"{tx.BytesLength}");
+                txBulkFile.Flush();
+                txBulkFile.Close();
+                BulkInsert(TxDbName, txFilePath);
+            }
+            catch (Exception e)
+            {
+                Log.Debug(e.Message);
+            }
+            finally
+            {
+                txBulkFile.Dispose();
+            }
         }
 
         public void SetBlockPerceivedTime(
@@ -363,16 +476,26 @@ namespace Libplanet.Explorer.Store
 
         public void StoreTxReferences(TxId txId, HashDigest<SHA256> blockHash, long txNonce)
         {
-           Insert(
-                TxRefDbName,
-                new Dictionary<string, object>
-                {
-                    ["tx_id"] = txId.ToByteArray(),
-                    ["tx_nonce"] = txNonce,
-                    ["block_hash"] = blockHash.ToByteArray(),
-                },
-                "tx_id",
-                txId.ToByteArray());
+            string txRefFilePath = Path.GetTempFileName();
+            using StreamWriter txRefBulkFile = new StreamWriter(txRefFilePath);
+            try
+            {
+                txRefBulkFile.WriteLine(
+                    $"{txId.ToString()}," +
+                    $"{blockHash.ToString()}," +
+                    $"{txNonce}");
+                txRefBulkFile.Flush();
+                txRefBulkFile.Close();
+                BulkInsert(TxRefDbName, txRefFilePath);
+            }
+            catch (Exception e)
+            {
+                Log.Debug(e.Message);
+            }
+            finally
+            {
+                txRefBulkFile.Dispose();
+            }
         }
 
         public IEnumerable<ValueTuple<TxId, HashDigest<SHA256>>> IterateTxReferences(
@@ -385,28 +508,38 @@ namespace Libplanet.Explorer.Store
             Query query = db.Query(TxRefDbName).Select(new[] { "tx_id", "block_hash" });
             if (!(txId is null))
             {
-                query = query.Where("tx_id", txId?.ToByteArray());
+                query = query.Where("tx_id", txId?.ToString());
             }
 
             query = desc ? query.OrderByDesc("tx_nonce") : query.OrderBy("tx_nonce");
             query = query.Offset(offset).Limit(limit);
             return db.GetDictionary(query).Select(dict => new ValueTuple<TxId, HashDigest<SHA256>>(
-                new TxId((byte[])dict["tx_id"]),
-                new HashDigest<SHA256>((byte[])dict["block_hash"])));
+                new TxId(ByteUtil.ParseHex(dict["tx_id"].ToString())),
+                new HashDigest<SHA256>(ByteUtil.ParseHex(dict["block_hash"].ToString()))));
         }
 
         public void StoreSignerReferences(TxId txId, long txNonce, Address signer)
         {
-            Insert(
-                SignerRefDbName,
-                new Dictionary<string, object>
-                {
-                    ["signer"] = signer.ToByteArray(),
-                    ["tx_id"] = txId.ToByteArray(),
-                    ["tx_nonce"] = txNonce,
-                },
-                "tx_id",
-                txId.ToByteArray());
+            string signerRefFilePath = Path.GetTempFileName();
+            using StreamWriter signerRefBulkFile = new StreamWriter(signerRefFilePath);
+            try
+            {
+                signerRefBulkFile.WriteLine(
+                    $"{signer.ToString()}," +
+                    $"{txId.ToHex()}," +
+                    $"{txNonce}");
+                signerRefBulkFile.Flush();
+                signerRefBulkFile.Close();
+                BulkInsert(SignerRefDbName, signerRefFilePath);
+            }
+            catch (Exception e)
+            {
+                Log.Debug(e.Message);
+            }
+            finally
+            {
+                signerRefBulkFile.Dispose();
+            }
         }
 
         public IEnumerable<TxId> IterateSignerReferences(
@@ -416,31 +549,44 @@ namespace Libplanet.Explorer.Store
             int limit = int.MaxValue)
         {
             using QueryFactory db = OpenDB();
-            var query = db.Query(SignerRefDbName).Where("signer", signer.ToByteArray())
+            var query = db.Query(SignerRefDbName).Where("signer", signer.ToString())
                 .Offset(offset)
                 .Limit(limit)
                 .Select("tx_id");
             query = desc ? query.OrderByDesc("tx_nonce") : query.OrderBy("tx_nonce");
             return query.OrderBy("tx_nonce")
-                .Get<byte[]>()
-                .Select(bytes => new TxId(bytes));
+                .Get<string>()
+                .Select(txString => new TxId(ByteUtil.ParseHex(txString)));
         }
 
-        public void StoreUpdatedAddressReferences(
-            TxId txId,
-            long txNonce,
-            Address updatedAddress)
+        public void StoreUpdatedAddressReferences<T>(Transaction<T> tx)
+            where T : IAction, new()
         {
-            Insert(
-                UpdatedAddressRefDbName,
-                new Dictionary<string, object>
+            string updatedAddressRefFilePath = Path.GetTempFileName();
+            using StreamWriter updatedAddressRefBulkFile = new StreamWriter(
+                updatedAddressRefFilePath);
+            try
+            {
+                foreach (Address address in tx.UpdatedAddresses)
                 {
-                    ["updated_address"] = updatedAddress.ToByteArray(),
-                    ["tx_id"] = txId.ToByteArray(),
-                    ["tx_nonce"] = txNonce,
-                },
-                "tx_id",
-                txId.ToByteArray());
+                    updatedAddressRefBulkFile.WriteLine(
+                        $"{address.ToString()}," +
+                        $"{tx.Id.ToString()}," +
+                        $"{tx.Nonce}");
+                }
+
+                updatedAddressRefBulkFile.Flush();
+                updatedAddressRefBulkFile.Close();
+                BulkInsert(UpdatedAddressRefDbName, updatedAddressRefFilePath);
+            }
+            catch (Exception e)
+            {
+                Log.Debug(e.Message);
+            }
+            finally
+            {
+                updatedAddressRefBulkFile.Dispose();
+            }
         }
 
         public IEnumerable<TxId> IterateUpdatedAddressReferences(
@@ -457,22 +603,22 @@ namespace Libplanet.Explorer.Store
                 .Select("tx_id");
             query = desc ? query.OrderByDesc("tx_nonce") : query.OrderBy("tx_nonce");
             return query.OrderBy("tx_nonce")
-                .Get<byte[]>()
-                .Select(bytes => new TxId(bytes));
+                .Get<string>()
+                .Select(txString => new TxId(ByteUtil.ParseHex(txString)));
         }
 
         private QueryFactory OpenDB() =>
             new QueryFactory(new MySqlConnection(_connectionString), _compiler);
 
-        private IList<T> Select<T>(
+        private IList<TModel> Select<TModel, TInput>(
             string tableName,
             string column,
-            byte[] id)
+            TInput id)
         {
             using QueryFactory db = OpenDB();
             try
             {
-                var rows = db.Query(tableName).Where(column, id).Get<T>();
+                var rows = db.Query(tableName).Where(column, id).Get<TModel>();
                 return rows.ToList();
             }
             catch (MySqlException e)
@@ -508,6 +654,31 @@ namespace Libplanet.Explorer.Store
                 {
                     throw;
                 }
+            }
+        }
+
+        private void BulkInsert(
+            string tableName,
+            string filePath)
+        {
+            using MySqlConnection connection = new MySqlConnection(_connectionString);
+            try
+            {
+                MySqlBulkLoader loader = new MySqlBulkLoader(connection)
+                {
+                    TableName = tableName,
+                    FileName = filePath,
+                    Timeout = 0,
+                    LineTerminator = "\n",
+                    FieldTerminator = ",",
+                    Local = true,
+                    ConflictOption = MySqlBulkLoaderConflictOption.Replace,
+                };
+                loader.Load();
+            }
+            catch (Exception e)
+            {
+                Log.Debug(e.Message);
             }
         }
 
