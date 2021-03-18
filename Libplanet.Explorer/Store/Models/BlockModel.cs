@@ -2,7 +2,7 @@ namespace MySqlStore.Models
 {
     public class BlockModel
     {
-        public int Index { get; set; }
+        public long Index { get; set; }
 
         public string Hash { get; set; }
 
