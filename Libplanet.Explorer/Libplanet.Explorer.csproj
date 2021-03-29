@@ -36,7 +36,7 @@
         runtime; build; native; contentfiles; analyzers
       </IncludeAssets>
     </PackageReference>
-    <PackageReference Include="GraphQL" Version="3.0.0" />
+    <PackageReference Include="GraphQL" Version="4.1.0" />
     <PackageReference Include="GraphQL.SystemTextJson" Version="3.0.0" />
     <PackageReference Include="Libplanet" Version="0.11.0-dev.20210311071650" />
     <PackageReference Include="Libplanet.RocksDBStore" Version="0.11.0-dev.20210311071650" />
