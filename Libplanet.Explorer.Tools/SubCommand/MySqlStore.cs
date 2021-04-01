@@ -77,13 +77,13 @@ namespace Libplanet.Explorer.Tools.SubCommand
 
             if (rocksdbStoreType == "new")
             {
-                originStore = new RocksDBStore(
+                originStore = new RocksDBStore.RocksDBStore(
                     originRootPath,
                     dbConnectionCacheSize: 10000);
             }
             else if (rocksdbStoreType == "mono")
             {
-                originStore = new MonoRocksDBStore(originRootPath);
+                originStore = new RocksDBStore.MonoRocksDBStore(originRootPath);
             }
             else
             {
