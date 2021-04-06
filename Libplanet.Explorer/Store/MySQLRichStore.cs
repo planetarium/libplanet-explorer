@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Data;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -37,6 +38,28 @@ namespace Libplanet.Explorer.Store
 
         private readonly MySqlCompiler _compiler;
         private readonly string _connectionString;
+        private string blockFilePath = Path.GetTempPath()
+            + Path.GetRandomFileName() + BlockDbName + ".tmp";
+
+        private string txFilePath = Path.GetTempPath()
+            + Path.GetRandomFileName() + TxDbName + ".tmp";
+
+        private string txRefFilePath = Path.GetTempPath()
+            + Path.GetRandomFileName() + TxRefDbName + ".tmp";
+
+        private string signerRefFilePath = Path.GetTempPath()
+            + Path.GetRandomFileName() + SignerRefDbName + ".tmp";
+
+        private string updatedAddressRefFilePath = Path.GetTempPath()
+            + Path.GetRandomFileName() + UpdatedAddressRefDbName + ".tmp";
+
+        private StreamWriter blockBulkWriter;
+        private StreamWriter txBulkWriter;
+        private StreamWriter txRefBulkWriter;
+        private StreamWriter signerRefBulkWriter;
+        private StreamWriter updatedAddressRefBulkWriter;
+        private int blockCount = 0;
+        private Stopwatch sw = new Stopwatch();
 
         public MySQLRichStore(IStore store, MySQLRichStoreOptions options)
         {
@@ -56,6 +79,16 @@ namespace Libplanet.Explorer.Store
             _compiler = new MySqlCompiler();
 
             _blockCache = new LruCache<HashDigest<SHA256>, BlockDigest>(capacity: 512);
+
+            blockBulkWriter = new StreamWriter(blockFilePath);
+            txBulkWriter = new StreamWriter(txFilePath);
+            txRefBulkWriter = new StreamWriter(txRefFilePath);
+            signerRefBulkWriter = new StreamWriter(signerRefFilePath);
+            updatedAddressRefBulkWriter = new StreamWriter(
+                updatedAddressRefFilePath);
+
+            StorePreviousBulkFiles();
+            sw.Start();
         }
 
         /// <inheritdoc cref="IStore"/>
@@ -157,42 +190,47 @@ namespace Libplanet.Explorer.Store
         public void PutBlock<T>(Block<T> block)
             where T : IAction, new()
         {
-            _store.PutBlock(block);
-            foreach (var tx in block.Transactions)
-            {
-                PutTransaction(tx);
-                StoreTxReferences(tx.Id, block.Hash, tx.Nonce);
-            }
-
-            string blockFilePath = Path.GetTempFileName();
-            using StreamWriter blockBulkFile = new StreamWriter(blockFilePath);
             try
             {
-                blockBulkFile.WriteLine(
-                    $"{block.Index}," +
-                    $"{block.Hash.ToString()}," +
-                    $"{block.PreEvaluationHash.ToString()}," +
-                    $"{block.StateRootHash?.ToString()}," +
-                    $"{block.Difficulty}," +
-                    $"{(long)block.TotalDifficulty}," +
-                    $"{block.Nonce.ToString()}," +
-                    $"{block.Miner?.ToString()}," +
-                    $"{block.PreviousHash?.ToString()}," +
-                    $"{block.Timestamp.ToString()}," +
-                    $"{block.TxHash?.ToString()}," +
+                foreach (var tx in block.Transactions)
+                {
+                    PutTransaction(tx);
+                    StoreTxReferences(tx.Id, block.Hash, tx.Nonce);
+                    StoreSignerReferences(tx.Id, tx.Nonce, tx.Signer);
+                    StoreUpdatedAddressReferences(tx);
+                }
+
+                blockBulkWriter.WriteLine(
+                    $"{block.Index};" +
+                    $"{block.Hash.ToString()};" +
+                    $"{block.PreEvaluationHash.ToString()};" +
+                    $"{block.StateRootHash?.ToString()};" +
+                    $"{block.Difficulty};" +
+                    $"{(long)block.TotalDifficulty};" +
+                    $"{block.Nonce.ToString()};" +
+                    $"{block.Miner?.ToString()};" +
+                    $"{block.PreviousHash?.ToString()};" +
+                    $"{block.Timestamp.ToString()};" +
+                    $"{block.TxHash?.ToString()};" +
                     $"{block.ProtocolVersion}");
-                blockBulkFile.Flush();
-                blockBulkFile.Close();
-                BulkInsert(BlockDbName, blockFilePath);
+
+                blockCount++;
+
+                // load to DB if blockCount is 50
+                // and sw time is more than 10 sec
+                if (blockCount == 50 || sw.ElapsedMilliseconds > 10000)
+                {
+                    LoadDatabase();
+                    blockCount = 0;
+                    sw.Restart();
+                }
             }
             catch (Exception e)
             {
                 Log.Debug(e.Message);
             }
-            finally
-            {
-                blockBulkFile.Dispose();
-            }
+
+            _store.PutBlock(block);
         }
 
         /// <inheritdoc cref="IStore"/>
@@ -442,34 +480,24 @@ namespace Libplanet.Explorer.Store
         public void PutTransaction<T>(Transaction<T> tx)
             where T : IAction, new()
         {
-            _store.PutTransaction(tx);
-            StoreUpdatedAddressReferences(tx);
-            StoreSignerReferences(tx.Id, tx.Nonce, tx.Signer);
-            string txFilePath = Path.GetTempFileName();
-            using StreamWriter txBulkFile = new StreamWriter(txFilePath);
             try
             {
-                txBulkFile.WriteLine(
-                    $"{tx.Id.ToString()}," +
-                    $"{tx.Nonce}," +
-                    $"{tx.Signer.ToString()}," +
-                    $"{ByteUtil.Hex(tx.Signature)}," +
-                    $"{tx.Timestamp.ToString()}," +
-                    $"{ByteUtil.Hex(tx.PublicKey.Format(true))}," +
-                    $"{tx.GenesisHash?.ToString()}," +
+                txBulkWriter.WriteLine(
+                    $"{tx.Id.ToString()};" +
+                    $"{tx.Nonce};" +
+                    $"{tx.Signer.ToString()};" +
+                    $"{ByteUtil.Hex(tx.Signature)};" +
+                    $"{tx.Timestamp.ToString()};" +
+                    $"{ByteUtil.Hex(tx.PublicKey.Format(true))};" +
+                    $"{tx.GenesisHash?.ToString()};" +
                     $"{tx.BytesLength}");
-                txBulkFile.Flush();
-                txBulkFile.Close();
-                BulkInsert(TxDbName, txFilePath);
             }
             catch (Exception e)
             {
                 Log.Debug(e.Message);
             }
-            finally
-            {
-                txBulkFile.Dispose();
-            }
+
+            _store.PutTransaction(tx);
         }
 
         public void SetBlockPerceivedTime(
@@ -481,25 +509,16 @@ namespace Libplanet.Explorer.Store
 
         public void StoreTxReferences(TxId txId, HashDigest<SHA256> blockHash, long txNonce)
         {
-            string txRefFilePath = Path.GetTempFileName();
-            using StreamWriter txRefBulkFile = new StreamWriter(txRefFilePath);
             try
             {
-                txRefBulkFile.WriteLine(
-                    $"{txId.ToString()}," +
-                    $"{blockHash.ToString()}," +
+                txRefBulkWriter.WriteLine(
+                    $"{txId.ToString()};" +
+                    $"{blockHash.ToString()};" +
                     $"{txNonce}");
-                txRefBulkFile.Flush();
-                txRefBulkFile.Close();
-                BulkInsert(TxRefDbName, txRefFilePath);
             }
             catch (Exception e)
             {
                 Log.Debug(e.Message);
-            }
-            finally
-            {
-                txRefBulkFile.Dispose();
             }
         }
 
@@ -525,25 +544,16 @@ namespace Libplanet.Explorer.Store
 
         public void StoreSignerReferences(TxId txId, long txNonce, Address signer)
         {
-            string signerRefFilePath = Path.GetTempFileName();
-            using StreamWriter signerRefBulkFile = new StreamWriter(signerRefFilePath);
             try
             {
-                signerRefBulkFile.WriteLine(
-                    $"{signer.ToString()}," +
-                    $"{txId.ToHex()}," +
+                signerRefBulkWriter.WriteLine(
+                    $"{signer.ToString()};" +
+                    $"{txId.ToHex()};" +
                     $"{txNonce}");
-                signerRefBulkFile.Flush();
-                signerRefBulkFile.Close();
-                BulkInsert(SignerRefDbName, signerRefFilePath);
             }
             catch (Exception e)
             {
                 Log.Debug(e.Message);
-            }
-            finally
-            {
-                signerRefBulkFile.Dispose();
             }
         }
 
@@ -567,30 +577,19 @@ namespace Libplanet.Explorer.Store
         public void StoreUpdatedAddressReferences<T>(Transaction<T> tx)
             where T : IAction, new()
         {
-            string updatedAddressRefFilePath = Path.GetTempFileName();
-            using StreamWriter updatedAddressRefBulkFile = new StreamWriter(
-                updatedAddressRefFilePath);
             try
             {
                 foreach (Address address in tx.UpdatedAddresses)
                 {
-                    updatedAddressRefBulkFile.WriteLine(
-                        $"{address.ToString()}," +
-                        $"{tx.Id.ToString()}," +
+                    updatedAddressRefBulkWriter.WriteLine(
+                        $"{address.ToString()};" +
+                        $"{tx.Id.ToString()};" +
                         $"{tx.Nonce}");
                 }
-
-                updatedAddressRefBulkFile.Flush();
-                updatedAddressRefBulkFile.Close();
-                BulkInsert(UpdatedAddressRefDbName, updatedAddressRefFilePath);
             }
             catch (Exception e)
             {
                 Log.Debug(e.Message);
-            }
-            finally
-            {
-                updatedAddressRefBulkFile.Dispose();
             }
         }
 
@@ -610,6 +609,125 @@ namespace Libplanet.Explorer.Store
             return query.OrderBy("tx_nonce")
                 .Get<string>()
                 .Select(txString => new TxId(ByteUtil.ParseHex(txString)));
+        }
+
+        public void LoadDatabase()
+        {
+            // flush streamwriter
+            blockBulkWriter.Flush();
+            txBulkWriter.Flush();
+            txRefBulkWriter.Flush();
+            signerRefBulkWriter.Flush();
+            updatedAddressRefBulkWriter.Flush();
+
+            // bulk load files to database
+            BulkLoad(TxDbName, txFilePath);
+            BulkLoad(TxRefDbName, txRefFilePath);
+            BulkLoad(SignerRefDbName, signerRefFilePath);
+            BulkLoad(
+                UpdatedAddressRefDbName,
+                updatedAddressRefFilePath);
+            BulkLoad(BlockDbName, blockFilePath);
+
+            // delete loaded files
+            File.Delete(blockFilePath);
+            File.Delete(txFilePath);
+            File.Delete(txRefFilePath);
+            File.Delete(signerRefFilePath);
+            File.Delete(updatedAddressRefFilePath);
+
+            // create new files
+            blockFilePath = Path.GetTempPath()
+                + Path.GetRandomFileName() + BlockDbName + ".tmp";
+            txFilePath = Path.GetTempPath()
+                + Path.GetRandomFileName() + TxDbName + ".tmp";
+            txRefFilePath = Path.GetTempPath()
+                + Path.GetRandomFileName() + TxRefDbName + ".tmp";
+            signerRefFilePath = Path.GetTempPath()
+                + Path.GetRandomFileName() + SignerRefDbName + ".tmp";
+            updatedAddressRefFilePath = Path.GetTempPath()
+                + Path.GetRandomFileName() + UpdatedAddressRefDbName + ".tmp";
+
+            // dispose flushed streamwriter and reset
+            blockBulkWriter.Dispose();
+            txBulkWriter.Dispose();
+            txRefBulkWriter.Dispose();
+            signerRefBulkWriter.Dispose();
+            updatedAddressRefBulkWriter.Dispose();
+            blockBulkWriter = new StreamWriter(blockFilePath);
+            txBulkWriter = new StreamWriter(txFilePath);
+            txRefBulkWriter = new StreamWriter(txRefFilePath);
+            signerRefBulkWriter = new StreamWriter(signerRefFilePath);
+            updatedAddressRefBulkWriter = new StreamWriter(
+                updatedAddressRefFilePath);
+        }
+
+        public void StorePreviousBulkFiles()
+        {
+            try
+            {
+                // store and delete previous bulk files if they exist
+                if (Directory.GetFiles(Path.GetTempPath(), "*block.tmp").Count() > 1)
+                {
+                    string previousBlockFile = Directory.GetFiles(
+                        Path.GetTempPath(),
+                        "*block.tmp")
+                        .OrderByDescending(x => File.GetLastWriteTime(x))
+                        .Last();
+                    BulkLoad(BlockDbName, previousBlockFile);
+                    File.Delete(previousBlockFile);
+                }
+
+                if (Directory.GetFiles(Path.GetTempPath(), "*transaction.tmp").Count() > 1)
+                {
+                    string previousTxFile = Directory.GetFiles(
+                        Path.GetTempPath(),
+                        "*transaction.tmp")
+                        .OrderByDescending(x => File.GetLastWriteTime(x))
+                        .Last();
+                    BulkLoad(TxDbName, previousTxFile);
+                    File.Delete(previousTxFile);
+                }
+
+                if (Directory.GetFiles(Path.GetTempPath(), "*tx_references.tmp").Count() > 1)
+                {
+                    string previousTxRefFile = Directory.GetFiles(
+                        Path.GetTempPath(),
+                        "*tx_references.tmp")
+                        .OrderByDescending(x => File.GetLastWriteTime(x))
+                        .Last();
+                    BulkLoad(TxRefDbName, previousTxRefFile);
+                    File.Delete(previousTxRefFile);
+                }
+
+                if (Directory.GetFiles(Path.GetTempPath(), "*signer_references.tmp").Count() > 1)
+                {
+                    string previousSignerRefFile = Directory.GetFiles(
+                        Path.GetTempPath(),
+                        "*signer_references.tmp")
+                        .OrderByDescending(x => File.GetLastWriteTime(x))
+                        .Last();
+                    BulkLoad(SignerRefDbName, previousSignerRefFile);
+                    File.Delete(previousSignerRefFile);
+                }
+
+                if (Directory.GetFiles(
+                    Path.GetTempPath(),
+                    "*updated_address_references.tmp").Count() > 1)
+                {
+                    string previousUpdatedAddressRefFile = Directory.GetFiles(
+                        Path.GetTempPath(),
+                        "*updated_address_references.tmp")
+                        .OrderByDescending(x => File.GetLastWriteTime(x))
+                        .Last();
+                    BulkLoad(UpdatedAddressRefDbName, previousUpdatedAddressRefFile);
+                    File.Delete(previousUpdatedAddressRefFile);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Debug(e.Message);
+            }
         }
 
         private QueryFactory OpenDB() =>
@@ -662,7 +780,7 @@ namespace Libplanet.Explorer.Store
             }
         }
 
-        private void BulkInsert(
+        private void BulkLoad(
             string tableName,
             string filePath)
         {
@@ -675,7 +793,7 @@ namespace Libplanet.Explorer.Store
                     FileName = filePath,
                     Timeout = 0,
                     LineTerminator = "\n",
-                    FieldTerminator = ",",
+                    FieldTerminator = ";",
                     Local = true,
                     ConflictOption = MySqlBulkLoaderConflictOption.Replace,
                 };
@@ -684,6 +802,10 @@ namespace Libplanet.Explorer.Store
             catch (Exception e)
             {
                 Log.Debug(e.Message);
+            }
+            finally
+            {
+                connection.Close();
             }
         }
 
