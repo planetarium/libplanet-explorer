@@ -37,7 +37,7 @@ namespace Libplanet.Explorer.Queries
         internal static IEnumerable<Block<T>> ListBlocks(
             bool desc,
             long offset,
-            long? limit,
+            int? limit,
             bool excludeEmptyTxs,
             Address? miner)
         {
@@ -51,6 +51,32 @@ namespace Libplanet.Explorer.Queries
 
             if (tipIndex < offset || offset < 0)
             {
+                yield break;
+            }
+
+            if (_store is MySQLRichStore mysqlStore)
+            {
+                IEnumerable<HashDigest<SHA256>> blockHashes;
+                if (!excludeEmptyTxs)
+                {
+                    blockHashes = mysqlStore.GetBlockHashes(
+                            desc, (int)offset, limit, miner
+                        );
+                }
+                else
+                {
+                    blockHashes = mysqlStore.GetBlockHashesWithTx(
+                            desc, (int)offset, limit, miner
+                        );
+                }
+
+                IEnumerable<Block<T>> blocks = blockHashes
+                    .Select(blockHash => _store.GetBlock<T>(blockHash));
+                foreach (Block<T> blk in blocks)
+                {
+                    yield return blk;
+                }
+
                 yield break;
             }
 
@@ -136,7 +162,7 @@ namespace Libplanet.Explorer.Queries
             {
                 foreach (var tx in desc ? block.Transactions.Reverse() : block.Transactions)
                 {
-                    if (IsValidTransacion(tx, signer, involved))
+                    if (IsValidTransaction(tx, signer, involved))
                     {
                         yield return tx;
                         limit--;
@@ -162,7 +188,7 @@ namespace Libplanet.Explorer.Queries
             }
 
             var stagedTxs = _chain.StagePolicy.Iterate(_chain)
-                .Where(tx => IsValidTransacion(tx, signer, involved))
+                .Where(tx => IsValidTransaction(tx, signer, involved))
                 .Skip(offset);
 
             stagedTxs = desc ? stagedTxs.OrderByDescending(tx => tx.Timestamp)
@@ -202,7 +228,7 @@ namespace Libplanet.Explorer.Queries
             return null;
         }
 
-        private static bool IsValidTransacion(
+        private static bool IsValidTransaction(
             Transaction<T> tx,
             Address? signer,
             Address? involved)

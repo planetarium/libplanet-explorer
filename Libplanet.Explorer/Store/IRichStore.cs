@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
+using Libplanet.Action;
 using Libplanet.Store;
 using Libplanet.Tx;
 
@@ -24,10 +25,8 @@ namespace Libplanet.Explorer.Store
             int offset = 0,
             int limit = int.MaxValue);
 
-        void StoreUpdatedAddressReferences(
-            TxId txId,
-            long txNonce,
-            Address updatedAddress);
+        void StoreUpdatedAddressReferences<T>(Transaction<T> tx)
+            where T : IAction, new();
 
         IEnumerable<TxId> IterateUpdatedAddressReferences(
             Address updatedAddress,

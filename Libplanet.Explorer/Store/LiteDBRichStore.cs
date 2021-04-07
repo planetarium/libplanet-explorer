@@ -307,10 +307,7 @@ namespace Libplanet.Explorer.Store
         {
             _store.PutTransaction(tx);
             StoreSignerReferences(tx.Id, tx.Nonce, tx.Signer);
-            foreach (var updatedAddress in tx.UpdatedAddresses)
-            {
-                StoreUpdatedAddressReferences(tx.Id, tx.Nonce, updatedAddress);
-            }
+            StoreUpdatedAddressReferences(tx);
         }
 
         public void SetBlockPerceivedTime(
@@ -380,18 +377,19 @@ namespace Libplanet.Explorer.Store
             return collection.Find(query, offset, limit).Select(doc => doc.TxId);
         }
 
-        public void StoreUpdatedAddressReferences(
-            TxId txId,
-            long txNonce,
-            Address updatedAddress)
+        public void StoreUpdatedAddressReferences<T>(Transaction<T> tx)
+            where T : IAction, new()
         {
-            var collection = UpdatedAddressRefCollection();
-            collection.Upsert(new AddressRefDoc
+            foreach (Address address in tx.UpdatedAddresses)
             {
-                Address = updatedAddress, TxNonce = txNonce, TxId = txId,
-            });
-            collection.EnsureIndex(nameof(AddressRefDoc.AddressString));
-            collection.EnsureIndex(nameof(AddressRefDoc.TxNonce));
+                var collection = UpdatedAddressRefCollection();
+                collection.Upsert(new AddressRefDoc
+                {
+                    Address = address, TxNonce = tx.Nonce, TxId = tx.Id,
+                });
+                collection.EnsureIndex(nameof(AddressRefDoc.AddressString));
+                collection.EnsureIndex(nameof(AddressRefDoc.TxNonce));
+            }
         }
 
         public IEnumerable<TxId> IterateUpdatedAddressReferences(
