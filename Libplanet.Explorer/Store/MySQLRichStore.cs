@@ -216,9 +216,9 @@ namespace Libplanet.Explorer.Store
 
                 blockCount++;
 
-                // load to DB if blockCount is 50
+                // load to DB if blockCount is 100
                 // and sw time is more than 10 sec
-                if (blockCount == 50 || sw.ElapsedMilliseconds > 10000)
+                if (blockCount == 100 || sw.ElapsedMilliseconds > 10000)
                 {
                     LoadDatabase();
                     blockCount = 0;
