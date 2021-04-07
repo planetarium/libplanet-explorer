@@ -333,7 +333,7 @@ namespace Libplanet.Explorer.Store
             }
 
             Delete(TxDbName, "tx_id", txid.ToHex());
-            Delete(UpdatedAddressRefDbName, "tx_id", txid.ToByteArray());
+            Delete(UpdatedAddressRefDbName, "tx_id", txid.ToHex());
 
             _store.DeleteTransaction(txid);
             return true;
@@ -363,21 +363,25 @@ namespace Libplanet.Explorer.Store
             {
                 if (limit != null)
                 {
-                    var query = db.Query(BlockDbName).Where("miner", miner.ToString())
+                    var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
+                        db.Query(BlockDbName).OrderBy("index");
+                    query = query
+                        .Where("miner", miner.ToString())
                         .Offset(offset)
                         .Limit((int)limit)
                         .Select("hash");
-                    query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
                     return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
                 }
                 else
                 {
-                    var query = db.Query(BlockDbName).Where("miner", miner.ToString())
+                    var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
+                        db.Query(BlockDbName).OrderBy("index");
+                    query = query
+                        .Where("miner", miner.ToString())
                         .Offset(offset)
                         .Select("hash");
-                    query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
                     return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
@@ -389,7 +393,7 @@ namespace Libplanet.Explorer.Store
                 {
                     var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
                         db.Query(BlockDbName).OrderBy("index");
-                    query = query.Offset(offset).Select("hash");
+                    query = query.Offset(offset).Limit((int)limit).Select("hash");
                     return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
@@ -398,7 +402,7 @@ namespace Libplanet.Explorer.Store
                 {
                     var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
                         db.Query(BlockDbName).OrderBy("index");
-                    query = query.Offset(offset).Limit((int)limit).Select("hash");
+                    query = query.Offset(offset).Select("hash");
                     return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
@@ -417,23 +421,27 @@ namespace Libplanet.Explorer.Store
             {
                 if (limit != null)
                 {
-                    var query = db.Query(BlockDbName).Where("miner", miner.ToString())
+                    var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
+                        db.Query(BlockDbName).OrderBy("index");
+                    query = query
+                        .Where("miner", miner.ToString())
                         .WhereNot("tx_hash", string.Empty)
                         .Offset(offset)
                         .Limit((int)limit)
                         .Select("hash");
-                    query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
                     return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
                 }
                 else
                 {
-                    var query = db.Query(BlockDbName).Where("miner", miner.ToString())
+                    var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
+                        db.Query(BlockDbName).OrderBy("index");
+                    query = query
+                        .Where("miner", miner.ToString())
                         .WhereNot("tx_hash", string.Empty)
                         .Offset(offset)
                         .Select("hash");
-                    query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
                     return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
@@ -592,7 +600,7 @@ namespace Libplanet.Explorer.Store
         {
             using QueryFactory db = OpenDB();
             var query = db.Query(UpdatedAddressRefDbName)
-                .Where("updated_address", updatedAddress.ToByteArray())
+                .Where("updated_address", updatedAddress.ToString())
                 .Offset(offset)
                 .Limit(limit)
                 .Select("tx_id");
