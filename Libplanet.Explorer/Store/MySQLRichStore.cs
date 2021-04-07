@@ -368,8 +368,7 @@ namespace Libplanet.Explorer.Store
                         .Limit((int)limit)
                         .Select("hash");
                     query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
-                    return query.OrderBy("index")
-                        .Get<string>()
+                    return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
                 }
@@ -379,8 +378,7 @@ namespace Libplanet.Explorer.Store
                         .Offset(offset)
                         .Select("hash");
                     query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
-                    return query.OrderBy("index")
-                        .Get<string>()
+                    return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
                 }
@@ -392,8 +390,7 @@ namespace Libplanet.Explorer.Store
                     var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
                         db.Query(BlockDbName).OrderBy("index");
                     query = query.Offset(offset).Select("hash");
-                    return query.OrderBy("index")
-                        .Get<string>()
+                    return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
                 }
@@ -402,8 +399,7 @@ namespace Libplanet.Explorer.Store
                     var query = desc ? db.Query(BlockDbName).OrderByDesc("index") :
                         db.Query(BlockDbName).OrderBy("index");
                     query = query.Offset(offset).Limit((int)limit).Select("hash");
-                    return query.OrderBy("index")
-                        .Get<string>()
+                    return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
                 }
@@ -427,8 +423,7 @@ namespace Libplanet.Explorer.Store
                         .Limit((int)limit)
                         .Select("hash");
                     query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
-                    return query.OrderBy("index")
-                        .Get<string>()
+                    return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
                 }
@@ -439,8 +434,7 @@ namespace Libplanet.Explorer.Store
                         .Offset(offset)
                         .Select("hash");
                     query = desc ? query.OrderByDesc("index") : query.OrderBy("index");
-                    return query.OrderBy("index")
-                        .Get<string>()
+                    return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
                 }
@@ -454,9 +448,9 @@ namespace Libplanet.Explorer.Store
                     query = query
                         .WhereNot("tx_hash", string.Empty)
                         .Offset(offset)
+                        .Limit((int)limit)
                         .Select("hash");
-                    return query.OrderBy("index")
-                        .Get<string>()
+                    return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
                 }
@@ -467,10 +461,8 @@ namespace Libplanet.Explorer.Store
                     query = query
                         .WhereNot("tx_hash", string.Empty)
                         .Offset(offset)
-                        .Limit((int)limit)
                         .Select("hash");
-                    return query.OrderBy("index")
-                        .Get<string>()
+                    return query.Get<string>()
                         .Select(hashString => new HashDigest<SHA256>(
                             ByteUtil.ParseHex(hashString)));
                 }
@@ -569,8 +561,7 @@ namespace Libplanet.Explorer.Store
                 .Limit(limit)
                 .Select("tx_id");
             query = desc ? query.OrderByDesc("tx_nonce") : query.OrderBy("tx_nonce");
-            return query.OrderBy("tx_nonce")
-                .Get<string>()
+            return query.Get<string>()
                 .Select(txString => new TxId(ByteUtil.ParseHex(txString)));
         }
 
@@ -606,8 +597,7 @@ namespace Libplanet.Explorer.Store
                 .Limit(limit)
                 .Select("tx_id");
             query = desc ? query.OrderByDesc("tx_nonce") : query.OrderBy("tx_nonce");
-            return query.OrderBy("tx_nonce")
-                .Get<string>()
+            return query.Get<string>()
                 .Select(txString => new TxId(ByteUtil.ParseHex(txString)));
         }
 
@@ -751,35 +741,6 @@ namespace Libplanet.Explorer.Store
             }
         }
 
-        private void Insert<T>(
-            string tableName,
-            IReadOnlyDictionary<string, object> data,
-            string key,
-            T value)
-        {
-            using QueryFactory db = OpenDB();
-            try
-            {
-                db.Query(tableName).Insert(data);
-            }
-            catch (MySqlException e)
-            {
-                if (e.ErrorCode == MySqlErrorCode.DuplicateKeyEntry)
-                {
-                    if (key != null && value != null)
-                    {
-                        Update(tableName, data, key, value);
-                    }
-
-                    Log.Debug($"Update DuplicateKeyEntry in {tableName}");
-                }
-                else
-                {
-                    throw;
-                }
-            }
-        }
-
         private void BulkLoad(
             string tableName,
             string filePath)
@@ -806,53 +767,6 @@ namespace Libplanet.Explorer.Store
             finally
             {
                 connection.Close();
-            }
-        }
-
-        private void InsertMany(
-            string tableName,
-            string[] columns,
-            IEnumerable<object[]> data)
-        {
-            using QueryFactory db = OpenDB();
-            try
-            {
-                db.Query(tableName).Insert(columns, data);
-            }
-            catch (MySqlException e)
-            {
-                if (e.ErrorCode == MySqlErrorCode.DuplicateKeyEntry)
-                {
-                    Log.Debug("Ignore DuplicateKeyEntry");
-                }
-                else
-                {
-                    throw;
-                }
-            }
-        }
-
-        private void Update<T>(
-            string tableName,
-            IReadOnlyDictionary<string, object> data,
-            string key,
-            T value)
-        {
-            using QueryFactory db = OpenDB();
-            try
-            {
-                db.Query(tableName).Where(key, value).Update(data);
-            }
-            catch (MySqlException e)
-            {
-                if (e.ErrorCode == MySqlErrorCode.DuplicateKeyEntry)
-                {
-                    Log.Debug($"Ignore DuplicateKeyEntry in {tableName}");
-                }
-                else
-                {
-                    throw;
-                }
             }
         }
 
