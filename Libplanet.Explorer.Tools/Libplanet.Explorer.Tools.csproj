@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Cocona.Lite" Version="1.5.0" />
+    <PackageReference Include="MySqlConnector" Version="1.3.2" />
+    <PackageReference Include="Libplanet.RocksDBStore" Version="0.11.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="SubCommand\" />
+  </ItemGroup>
+</Project>
