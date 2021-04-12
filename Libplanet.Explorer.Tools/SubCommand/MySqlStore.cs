@@ -24,66 +24,28 @@ namespace Libplanet.Explorer.Tools.SubCommand
         private const string TxRefDbName = "tx_references";
         private const string SignerRefDbName = "signer_references";
         private const string UpdatedAddressRefDbName = "updated_address_references";
-        private StreamWriter blockBulkFile;
-        private StreamWriter txBulkFile;
-        private StreamWriter txRefBulkFile;
-        private StreamWriter signerRefBulkFile;
-        private StreamWriter updatedAddressRefBulkFile;
-        private string _connectionString;
 
-        [Command(Description = "Migrate rocksdb store to mysql store.")]
-        public async Task Migration(
-            [Option('o', Description = "Path to migration target root path.")]
-            string originRootPath,
+        [Command(Description = "Migrate rocksdb store to mysql csv file.")]
+        public void Migration(
+            string storePath,
+            string outputDirectory,
             [Option(
                 "rocksdb-storetype",
                 Description = "Store type of RocksDb to migrate.")]
-            string rocksdbStoreType,
-            [Option(
-                "mysql-server",
-                Description = "A hostname of MySQL server.")]
-            string mysqlServer,
-            [Option(
-                "mysql-port",
-                Description = "A port of MySQL server.")]
-            uint mysqlPort,
-            [Option(
-                "mysql-username",
-                Description = "The name of MySQL user.")]
-            string mysqlUsername,
-            [Option(
-                "mysql-password",
-                Description = "The password of MySQL user.")]
-            string mysqlPassword,
-            [Option(
-                "mysql-database",
-                Description = "The name of MySQL database to use.")]
-            string mysqlDatabase
+            string rocksdbStoreType
             )
         {
-            var builder = new MySqlConnectionStringBuilder
-            {
-                Database = mysqlDatabase,
-                UserID = mysqlUsername,
-                Password = mysqlPassword,
-                Server = mysqlServer,
-                Port = mysqlPort,
-                AllowLoadLocalInfile = true,
-            };
-
-            _connectionString = builder.ConnectionString;
-
             IStore originStore;
 
             if (rocksdbStoreType == "new")
             {
                 originStore = new RocksDBStore.RocksDBStore(
-                    originRootPath,
+                    storePath,
                     dbConnectionCacheSize: 10000);
             }
             else if (rocksdbStoreType == "mono")
             {
-                originStore = new RocksDBStore.MonoRocksDBStore(originRootPath);
+                originStore = new RocksDBStore.MonoRocksDBStore(storePath);
             }
             else
             {
@@ -97,23 +59,64 @@ namespace Libplanet.Explorer.Tools.SubCommand
                 throw new CommandExitedException("Invalid rocksdb-store. Please enter a valid store path", -1);
             }
 
-            string blockFilePath = Path.GetTempFileName();
-            blockBulkFile = new StreamWriter(blockFilePath);
+            if (!Directory.Exists(outputDirectory))
+            {
+                throw new CommandExitedException("Invalid outputDirectory. Please enter a valid output path", -1);
+            }
 
-            string txFilePath = Path.GetTempFileName();
-            txBulkFile = new StreamWriter(txFilePath);
+            string blockFilePath = outputDirectory + $"/{BlockDbName}.csv";
+            StreamWriter blockBulkFile = new StreamWriter(blockFilePath);
 
-            string txRefFilePath = Path.GetTempFileName();
-            txRefBulkFile = new StreamWriter(txRefFilePath);
+            string txFilePath = outputDirectory + $"/{TxDbName}.csv";
+            StreamWriter txBulkFile = new StreamWriter(txFilePath);
 
-            string signerRefFilePath = Path.GetTempFileName();
-            signerRefBulkFile = new StreamWriter(signerRefFilePath);
+            string txRefFilePath = outputDirectory + $"/{TxRefDbName}.csv";
+            StreamWriter txRefBulkFile = new StreamWriter(txRefFilePath);
 
-            string updatedAddressRefFilePath = Path.GetTempFileName();
-            updatedAddressRefBulkFile = new StreamWriter(
+            string signerRefFilePath = outputDirectory + $"/{SignerRefDbName}.csv";
+            StreamWriter signerRefBulkFile = new StreamWriter(signerRefFilePath);
+
+            string updatedAddressRefFilePath = outputDirectory + $"/{UpdatedAddressRefDbName}.csv";
+            StreamWriter updatedAddressRefBulkFile = new StreamWriter(
                 updatedAddressRefFilePath);
 
-            Console.WriteLine("Start preparing block data to load.");
+            WriteHeader(BlockDbName, blockBulkFile);
+            WriteHeader(TxDbName, txBulkFile);
+            WriteHeader(TxRefDbName, txRefBulkFile);
+            WriteHeader(SignerRefDbName, signerRefBulkFile);
+            WriteHeader(UpdatedAddressRefDbName, updatedAddressRefBulkFile);
+            MigrateData(
+                originStore,
+                totalLength,
+                blockBulkFile,
+                txBulkFile,
+                txRefBulkFile,
+                signerRefBulkFile,
+                updatedAddressRefBulkFile);
+        }
+
+        private static string Hex(byte[] bytes)
+        {
+            if (bytes == null)
+            {
+                throw new ArgumentNullException(nameof(bytes));
+            }
+
+            string s = BitConverter.ToString(bytes);
+            return s.Replace("-", string.Empty).ToLower(CultureInfo.InvariantCulture);
+        }
+
+        public void MigrateData(
+            IStore originStore,
+            long totalLength,
+            StreamWriter blockBulkFile,
+            StreamWriter txBulkFile,
+            StreamWriter txRefBulkFile,
+            StreamWriter signerRefBulkFile,
+            StreamWriter updatedAddressRefBulkFile
+        )
+        {
+            Console.WriteLine("Start migrating block.");
             Stopwatch sw = new Stopwatch();
             sw.Start();
 
@@ -126,8 +129,10 @@ namespace Libplanet.Explorer.Tools.SubCommand
                 var block = originStore.GetBlock<DummyAction>(item.value);
                 foreach (var tx in block.Transactions)
                 {
-                    PutTransaction(tx);
-                    StoreTxReferences(tx.Id, block.Hash, tx.Nonce);
+                    PutTransaction(tx, txBulkFile);
+                    StoreTxReferences(tx.Id, block.Hash, tx.Nonce, txRefBulkFile);
+                    StoreSignerReferences(tx.Id, tx.Nonce, tx.Signer, signerRefBulkFile);
+                    StoreUpdatedAddressReferences(tx, updatedAddressRefBulkFile);
                 }
 
                 try
@@ -148,84 +153,40 @@ namespace Libplanet.Explorer.Tools.SubCommand
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e.Message);
+                    Console.Error.WriteLine(e.Message);
+                    Console.Error.Flush();
+                    throw;
                 }
             }
-
-            Console.WriteLine("Finished block data preparation.");
-            sw.Stop();
-            Console.WriteLine("Time elapsed: {0:hh\\:mm\\:ss}", sw.Elapsed);
 
             blockBulkFile.Flush();
             blockBulkFile.Close();
-            var blockTask = BulkInsertAsync(BlockDbName, blockFilePath);
+            blockBulkFile.Dispose();
 
             txBulkFile.Flush();
             txBulkFile.Close();
-            var txTask = BulkInsertAsync(TxDbName, txFilePath);
+            txBulkFile.Dispose();
 
             txRefBulkFile.Flush();
             txRefBulkFile.Close();
-            var txRefTask = BulkInsertAsync(TxRefDbName, txRefFilePath);
+            txRefBulkFile.Dispose();
 
             signerRefBulkFile.Flush();
             signerRefBulkFile.Close();
-            var signerRefTask = BulkInsertAsync(SignerRefDbName, signerRefFilePath);
+            signerRefBulkFile.Dispose();
 
             updatedAddressRefBulkFile.Flush();
             updatedAddressRefBulkFile.Close();
-            var updatedAddressRefTask = BulkInsertAsync(
-                UpdatedAddressRefDbName,
-                updatedAddressRefFilePath);
+            updatedAddressRefBulkFile.Dispose();
 
-            var migrationTasks = new List<Task> { blockTask, txTask, txRefTask, signerRefTask, updatedAddressRefTask };
-            while (migrationTasks.Count > 0)
-            {
-                Task finishedTask = await Task.WhenAny(migrationTasks);
-                if (finishedTask == blockTask)
-                {
-                    blockBulkFile.Dispose();
-                }
-                else if (finishedTask == txTask)
-                {
-                    txBulkFile.Dispose();
-                }
-                else if (finishedTask == txRefTask)
-                {
-                    txRefBulkFile.Dispose();
-                }
-                else if (finishedTask == signerRefTask)
-                {
-                    signerRefBulkFile.Dispose();
-                }
-                else if (finishedTask == updatedAddressRefTask)
-                {
-                    updatedAddressRefBulkFile.Dispose();
-                }
-
-                migrationTasks.Remove(finishedTask);
-            }
-
-            Console.WriteLine("Migration Complete!");
+            sw.Stop();
+            Console.WriteLine("Finished block data migration.");
+            Console.WriteLine("Time elapsed: {0:hh\\:mm\\:ss}", sw.Elapsed);
         }
 
-        private static string Hex(byte[] bytes)
-        {
-            if (bytes == null)
-            {
-                throw new ArgumentNullException(nameof(bytes));
-            }
-
-            string s = BitConverter.ToString(bytes);
-            return s.Replace("-", string.Empty).ToLower(CultureInfo.InvariantCulture);
-        }
-
-        private void PutTransaction<T>(Transaction<T> tx)
+        private void PutTransaction<T>(Transaction<T> tx, StreamWriter txBulkFile)
             where T : IAction, new()
         {
-            StoreUpdatedAddressReferences(tx);
-            StoreSignerReferences(tx.Id, tx.Nonce, tx.Signer);
-
             try
             {
                 txBulkFile.WriteLine(
@@ -240,11 +201,17 @@ namespace Libplanet.Explorer.Tools.SubCommand
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                Console.Error.WriteLine(e.Message);
+                Console.Error.Flush();
+                throw;
             }
         }
 
-        private void StoreTxReferences(TxId txId, Libplanet.HashDigest<SHA256> blockHash, long txNonce)
+        private void StoreTxReferences(
+            TxId txId,
+            Libplanet.HashDigest<SHA256> blockHash,
+            long txNonce,
+            StreamWriter txRefBulkFile)
         {
             try
             {
@@ -255,11 +222,17 @@ namespace Libplanet.Explorer.Tools.SubCommand
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                Console.Error.WriteLine(e.Message);
+                Console.Error.Flush();
+                throw;
             }
         }
 
-        private void StoreSignerReferences(TxId txId, long txNonce, Libplanet.Address signer)
+        private void StoreSignerReferences(
+            TxId txId,
+            long txNonce,
+            Libplanet.Address signer,
+            StreamWriter signerRefBulkFile)
         {
             try
             {
@@ -271,11 +244,15 @@ namespace Libplanet.Explorer.Tools.SubCommand
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                Console.Error.WriteLine(e.Message);
+                Console.Error.Flush();
+                throw;
             }
         }
 
-        private void StoreUpdatedAddressReferences<T>(Transaction<T> tx)
+        private void StoreUpdatedAddressReferences<T>(
+            Transaction<T> tx,
+            StreamWriter updatedAddressRefBulkFile)
             where T : IAction, new()
         {
             try
@@ -290,41 +267,71 @@ namespace Libplanet.Explorer.Tools.SubCommand
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                Console.Error.WriteLine(e.Message);
+                Console.Error.Flush();
+                throw;
             }
         }
 
-        private async Task<int> BulkInsertAsync(
-            string tableName,
-            string filePath)
+        public void WriteHeader(string dbName, StreamWriter bulkFile)
         {
-            using MySqlConnection connection = new MySqlConnection(_connectionString);
             try
             {
-                Stopwatch sw = new Stopwatch();
-                sw.Start();
-                Console.WriteLine($"Start bulk load to {tableName}.");
-                MySqlBulkLoader loader = new MySqlBulkLoader(connection)
+                if (dbName == "block")
                 {
-                    TableName = tableName,
-                    FileName = filePath,
-                    Timeout = 0,
-                    LineTerminator = "\n",
-                    FieldTerminator = ";",
-                    Local = true,
-                    ConflictOption = MySqlBulkLoaderConflictOption.Replace,
-                };
-                var rows = await loader.LoadAsync();
-                Console.WriteLine($"Bulk load to {tableName} complete.");
-                sw.Stop();
-                Console.WriteLine("Time elapsed: {0:hh\\:mm\\:ss}", sw.Elapsed);
-                return rows;
+                    bulkFile.WriteLine(
+                        "index;" +
+                        "hash;" +
+                        "pre_evaluation_hash;" +
+                        "state_root_hash;" +
+                        "difficulty;" +
+                        "total_difficulty;" +
+                        "nonce;" +
+                        "miner;" +
+                        "previous_hash;" +
+                        "timestamp;" +
+                        "tx_hash;" +
+                        "protocol_version");
+                }
+                else if (dbName == "transaction")
+                {
+                    bulkFile.WriteLine(
+                        "tx_id;" +
+                        "nonce;" +
+                        "signer;" +
+                        "signature;" +
+                        "timestamp;" +
+                        "public_key;" +
+                        "genesis_hash;" +
+                        "bytes_length");
+                }
+                else if (dbName == "tx_references")
+                {
+                    bulkFile.WriteLine(
+                        "tx_id;" +
+                        "block_hash;" +
+                        "tx_nonce");
+                }
+                else if (dbName == "signer_references")
+                {
+                    bulkFile.WriteLine(
+                        "signer;" +
+                        "tx_id;" +
+                        "tx_nonce");
+                }
+                else
+                {
+                    bulkFile.WriteLine(
+                        "updated_address;" +
+                        "tx_id;" +
+                        "tx_nonce");
+                }
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
-                Console.WriteLine($"Bulk load to {tableName} failed.");
-                return 0;
+                Console.Error.WriteLine("Error: {0}", e.Message);
+                Console.Error.Flush();
+                throw;
             }
         }
 
